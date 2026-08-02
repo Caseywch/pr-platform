@@ -25,6 +25,7 @@ export default async function Home() {
             <h1 className="text-2xl font-bold mt-1">Welcome, {profile?.name || user.email}</h1>
           </div>
           <div className="flex items-center gap-4">
+            <a href="/board" className="text-xs px-3 py-1.5 rounded-md bg-neutral-900 text-white">Go to Board</a>
             {profile?.is_admin && (
               <a href="/admin" className="text-xs px-3 py-1.5 rounded-md bg-neutral-900 text-white">Admin Setup</a>
             )}
