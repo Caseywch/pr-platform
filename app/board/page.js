@@ -14,7 +14,7 @@ export default async function BoardPage() {
     supabase.from("profiles").select("id, name, is_admin, is_purchasing").eq("id", user.id).single(),
     supabase
       .from("purchase_requisitions")
-      .select("*, projects(name, code), suppliers(name)")
+      .select("*, projects(name, code), suppliers(name), verifier:profiles!verified_by(name), approver:profiles!approved_by(name)")
       .order("created_at", { ascending: false }),
     supabase.from("projects").select("id, name, code").order("name"),
     supabase.from("suppliers").select("id, name").order("name"),
