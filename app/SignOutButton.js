@@ -14,7 +14,7 @@ export default function SignOutButton() {
   };
 
   return (
-    <button onClick={signOut} className="text-xs underline text-neutral-500">
+    <button onClick={signOut} className="text-xs underline text-neutral-600">
       Sign out
     </button>
   );
