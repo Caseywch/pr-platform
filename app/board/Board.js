@@ -19,19 +19,32 @@ function today() {
 function blankItem() {
   return { itemNumber: "", description: "", sku: "", qty: "", uomId: "", remark: "" };
 }
+function canActAs(allProjectRoles, projectId, role, userId) {
+  const assigned = allProjectRoles.filter((r) => r.project_id === projectId && r.role === role);
+  if (assigned.length === 0) return true;
+  return assigned.some((r) => r.user_id === userId);
+}
+function assignedNames(allProjectRoles, projectId, role) {
+  return allProjectRoles.filter((r) => r.project_id === projectId && r.role === role).map((r) => r.user_id);
+}
 
 const btn = "text-sm px-3 py-1.5 rounded-md";
 const input = "border border-neutral-300 rounded-md px-3 py-2 text-sm";
 const card = "bg-white border border-neutral-200 rounded-lg p-5";
 
-export default function Board({ profile, initialPrs, allProjects, eligibleProjects, suppliers, uoms }) {
+export default function Board({ profile, initialPrs, allProjects, eligibleProjects, suppliers, uoms, allProjectRoles }) {
   const supabase = createClient();
   const [prs, setPrs] = useState(initialPrs);
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [itemsByPr, setItemsByPr] = useState({});
+  const [deliveriesByPr, setDeliveriesByPr] = useState({});
   const [statusFilter, setStatusFilter] = useState("all");
   const [error, setError] = useState("");
+  const [rejectingId, setRejectingId] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [poDraft, setPoDraft] = useState({});
+  const [deliveryDraft, setDeliveryDraft] = useState({});
 
   const projectName = (pr) => pr.projects?.name || "Unknown project";
   const projectCode = (pr) => pr.projects?.code || "";
@@ -42,6 +55,8 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
   const counts = {};
   Object.keys(STATUS_META).forEach((k) => (counts[k] = 0));
   prs.forEach((p) => (counts[p.status] = (counts[p.status] || 0) + 1));
+
+  const updatePrLocal = (id, patch) => setPrs(prs.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
   const toggleExpand = async (pr) => {
     if (expandedId === pr.id) {
@@ -55,17 +70,109 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
         .select("*, uoms(name)")
         .eq("pr_id", pr.id)
         .order("item_number");
-      if (error) {
-        setError(error.message);
-        return;
-      }
-      setItemsByPr({ ...itemsByPr, [pr.id]: data || [] });
+      if (error) { setError(error.message); return; }
+      setItemsByPr((prev) => ({ ...prev, [pr.id]: data || [] }));
+    }
+    if (!deliveriesByPr[pr.id]) {
+      const { data, error } = await supabase
+        .from("pr_deliveries")
+        .select("*")
+        .eq("pr_id", pr.id)
+        .order("created_at");
+      if (error) { setError(error.message); return; }
+      setDeliveriesByPr((prev) => ({ ...prev, [pr.id]: data || [] }));
     }
   };
 
   const onCreated = (newPr) => {
     setPrs([newPr, ...prs]);
     setShowForm(false);
+  };
+
+  const verify = async (pr) => {
+    const { data, error } = await supabase
+      .from("purchase_requisitions")
+      .update({ status: "pending_approval", verified_by: profile.name, verified_date: today() })
+      .eq("id", pr.id)
+      .select()
+      .single();
+    if (error) return setError(error.message);
+    updatePrLocal(pr.id, data);
+  };
+
+  const approve = async (pr) => {
+    const { data, error } = await supabase
+      .from("purchase_requisitions")
+      .update({ status: "pending_po", approved_by: profile.name, approved_date: today() })
+      .eq("id", pr.id)
+      .select()
+      .single();
+    if (error) return setError(error.message);
+    updatePrLocal(pr.id, data);
+  };
+
+  const reject = async (pr, byRole) => {
+    if (!rejectReason.trim()) return;
+    const { data, error } = await supabase
+      .from("purchase_requisitions")
+      .update({ status: "rejected", rejected_by: byRole, rejection_reason: rejectReason.trim() })
+      .eq("id", pr.id)
+      .select()
+      .single();
+    if (error) return setError(error.message);
+    updatePrLocal(pr.id, data);
+    setRejectingId(null);
+    setRejectReason("");
+  };
+
+  const resubmit = async (pr) => {
+    const { data, error } = await supabase
+      .from("purchase_requisitions")
+      .update({ status: "pending_verification", rejected_by: null, rejection_reason: null })
+      .eq("id", pr.id)
+      .select()
+      .single();
+    if (error) return setError(error.message);
+    updatePrLocal(pr.id, data);
+  };
+
+  const issuePo = async (pr) => {
+    const poNumber = poDraft[pr.id];
+    if (!poNumber?.trim()) return;
+    const { data, error } = await supabase
+      .from("purchase_requisitions")
+      .update({ status: "po_issued", po_number: poNumber.trim(), po_date: today() })
+      .eq("id", pr.id)
+      .select()
+      .single();
+    if (error) return setError(error.message);
+    updatePrLocal(pr.id, data);
+    setPoDraft((prev) => ({ ...prev, [pr.id]: "" }));
+  };
+
+  const logDelivery = async (pr) => {
+    const draft = deliveryDraft[pr.id];
+    if (!draft?.doNumber?.trim() || !draft?.deliveryDate) return;
+    const { data: deliveryRow, error: deliveryError } = await supabase
+      .from("pr_deliveries")
+      .insert({ pr_id: pr.id, do_number: draft.doNumber.trim(), delivery_date: draft.deliveryDate, type: draft.type })
+      .select()
+      .single();
+    if (deliveryError) return setError(deliveryError.message);
+    setDeliveriesByPr((prev) => ({ ...prev, [pr.id]: [...(prev[pr.id] || []), deliveryRow] }));
+
+    const patch = draft.type === "complete"
+      ? { status: "fulfilled", fulfilled_date: draft.deliveryDate }
+      : { status: "partial_delivery" };
+    const { data, error } = await supabase
+      .from("purchase_requisitions")
+      .update(patch)
+      .eq("id", pr.id)
+      .select()
+      .single();
+    if (error) return setError(error.message);
+    updatePrLocal(pr.id, data);
+    setDeliveryDraft((prev) => ({ ...prev, [pr.id]: { doNumber: "", deliveryDate: today(), type: "complete" } }));
   };
 
   return (
@@ -129,6 +236,11 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
             const meta = STATUS_META[pr.status] || { label: pr.status, color: "#666" };
             const isOpen = expandedId === pr.id;
             const items = itemsByPr[pr.id];
+            const deliveries = deliveriesByPr[pr.id];
+            const canVerify = canActAs(allProjectRoles, pr.project_id, "verifier", profile.id);
+            const canApprove = canActAs(allProjectRoles, pr.project_id, "approver", profile.id);
+            const draft = deliveryDraft[pr.id] || { doNumber: "", deliveryDate: today(), type: "complete" };
+
             return (
               <div key={pr.id} className={card + " p-0"}>
                 <button onClick={() => toggleExpand(pr)} className="w-full flex items-center justify-between px-4 py-3 text-left">
@@ -144,14 +256,16 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                     {meta.label}
                   </span>
                 </button>
+
                 {isOpen && (
                   <div className="px-4 pb-4 pt-1 border-t border-neutral-100">
                     <div className="text-xs text-neutral-600 mb-2">
                       Requested {pr.request_date} · Required {pr.required_date}
                     </div>
+
                     {!items && <div className="text-xs text-neutral-600">Loading items…</div>}
                     {items && (
-                      <table className="w-full text-xs">
+                      <table className="w-full text-xs mb-3">
                         <thead>
                           <tr className="text-left text-neutral-600">
                             <th className="py-1 pr-3">Item No.</th>
@@ -176,6 +290,103 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                         </tbody>
                       </table>
                     )}
+
+                    <div className="text-xs text-neutral-600 mb-3 flex flex-col gap-0.5">
+                      {pr.verified_by && <div>Verified by {pr.verified_by} on {pr.verified_date}</div>}
+                      {pr.approved_by && <div>Approved by {pr.approved_by} on {pr.approved_date}</div>}
+                      {pr.po_number && <div>PO {pr.po_number} issued {pr.po_date}</div>}
+                      {(deliveries || []).map((d) => (
+                        <div key={d.id}>DO {d.do_number} — {d.type === "complete" ? "Complete" : "Partial"} delivery on {d.delivery_date}</div>
+                      ))}
+                      {pr.status === "rejected" && (
+                        <div className="text-red-600">Rejected by {pr.rejected_by}: "{pr.rejection_reason}"</div>
+                      )}
+                    </div>
+
+                    {/* Verifier actions */}
+                    {pr.status === "pending_verification" && (
+                      canVerify ? (
+                        rejectingId === pr.id ? (
+                          <RejectBox reason={rejectReason} setReason={setRejectReason} onConfirm={() => reject(pr, "verifier")} onCancel={() => { setRejectingId(null); setRejectReason(""); }} />
+                        ) : (
+                          <div className="flex gap-2">
+                            <button onClick={() => verify(pr)} className={`${btn} text-white`} style={{ background: "#1F6B63" }}>Verify</button>
+                            <button onClick={() => setRejectingId(pr.id)} className={`${btn} border`} style={{ borderColor: "#B23A2E", color: "#B23A2E" }}>Reject</button>
+                          </div>
+                        )
+                      ) : (
+                        <div className="text-xs text-neutral-600">Only assigned Verifiers for this project can act.</div>
+                      )
+                    )}
+
+                    {/* Approver actions */}
+                    {pr.status === "pending_approval" && (
+                      canApprove ? (
+                        rejectingId === pr.id ? (
+                          <RejectBox reason={rejectReason} setReason={setRejectReason} onConfirm={() => reject(pr, "approver")} onCancel={() => { setRejectingId(null); setRejectReason(""); }} />
+                        ) : (
+                          <div className="flex gap-2">
+                            <button onClick={() => approve(pr)} className={`${btn} text-white`} style={{ background: "#34456B" }}>Approve</button>
+                            <button onClick={() => setRejectingId(pr.id)} className={`${btn} border`} style={{ borderColor: "#B23A2E", color: "#B23A2E" }}>Reject</button>
+                          </div>
+                        )
+                      ) : (
+                        <div className="text-xs text-neutral-600">Only assigned Approvers for this project can act.</div>
+                      )
+                    )}
+
+                    {/* Purchasing: issue PO */}
+                    {pr.status === "pending_po" && profile.is_purchasing && (
+                      <div className="flex gap-2">
+                        <input
+                          className={input + " flex-1"}
+                          placeholder="PO number"
+                          value={poDraft[pr.id] || ""}
+                          onChange={(e) => setPoDraft({ ...poDraft, [pr.id]: e.target.value })}
+                        />
+                        <button onClick={() => issuePo(pr)} className={`${btn} text-white shrink-0`} style={{ background: "#1F6B63" }}>Issue PO</button>
+                      </div>
+                    )}
+
+                    {/* Purchasing: log delivery */}
+                    {(pr.status === "po_issued" || pr.status === "partial_delivery") && profile.is_purchasing && (
+                      <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3">
+                        <div className="text-xs uppercase tracking-wide text-neutral-600 mb-2">Log delivery</div>
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                          <input
+                            className={input + " text-xs"}
+                            placeholder="Supplier DO number"
+                            value={draft.doNumber}
+                            onChange={(e) => setDeliveryDraft({ ...deliveryDraft, [pr.id]: { ...draft, doNumber: e.target.value } })}
+                          />
+                          <input
+                            type="date"
+                            max={today()}
+                            className={input + " text-xs"}
+                            value={draft.deliveryDate}
+                            onChange={(e) => setDeliveryDraft({ ...deliveryDraft, [pr.id]: { ...draft, deliveryDate: e.target.value } })}
+                          />
+                        </div>
+                        <div className="flex items-center gap-4 mb-2 text-xs">
+                          <label className="flex items-center gap-1.5">
+                            <input type="radio" checked={draft.type === "complete"} onChange={() => setDeliveryDraft({ ...deliveryDraft, [pr.id]: { ...draft, type: "complete" } })} />
+                            Complete delivery
+                          </label>
+                          <label className="flex items-center gap-1.5">
+                            <input type="radio" checked={draft.type === "partial"} onChange={() => setDeliveryDraft({ ...deliveryDraft, [pr.id]: { ...draft, type: "partial" } })} />
+                            Partial delivery
+                          </label>
+                        </div>
+                        <button onClick={() => logDelivery(pr)} className={`${btn} text-white`} style={{ background: "#1F6B63" }}>Save delivery record</button>
+                      </div>
+                    )}
+
+                    {/* Requester: resubmit */}
+                    {pr.status === "rejected" && pr.requester_id === profile.id && (
+                      <button onClick={() => resubmit(pr)} className={`${btn} text-white`} style={{ background: "#171717" }}>
+                        Resubmit for Verification
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -183,6 +394,23 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
           })}
           {filtered.length === 0 && <div className="text-sm text-neutral-600 text-center py-10">No requisitions here yet.</div>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function RejectBox({ reason, setReason, onConfirm, onCancel }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <input
+        className={input + " text-xs"}
+        placeholder="Reason for rejection"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+      />
+      <div className="flex gap-2">
+        <button onClick={onConfirm} className={`${btn} text-white`} style={{ background: "#B23A2E" }}>Confirm reject</button>
+        <button onClick={onCancel} className={`${btn} border border-neutral-300`}>Cancel</button>
       </div>
     </div>
   );
