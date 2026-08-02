@@ -21,7 +21,7 @@ export default async function Home() {
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center justify-between border-b border-neutral-200 pb-4 mb-6">
           <div>
-            <div className="text-xs uppercase tracking-widest text-neutral-500">Purchase Requisition Platform</div>
+            <div className="text-xs uppercase tracking-widest text-neutral-600">Purchase Requisition Platform</div>
             <h1 className="text-2xl font-bold mt-1">Welcome, {profile?.name || user.email}</h1>
           </div>
           <div className="flex items-center gap-4">
@@ -53,7 +53,7 @@ export default async function Home() {
           )}
         </div>
 
-        <div className="text-xs text-neutral-400 mt-6">
+        <div className="text-xs text-neutral-600 mt-6">
           {profile?.is_admin
             ? "Head to Admin Setup above to configure Projects, Suppliers, UOMs, roles, and SLA."
             : "Next: the Purchase Requisition workflow gets built here."}
