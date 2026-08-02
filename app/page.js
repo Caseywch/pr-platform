@@ -24,7 +24,12 @@ export default async function Home() {
             <div className="text-xs uppercase tracking-widest text-neutral-500">Purchase Requisition Platform</div>
             <h1 className="text-2xl font-bold mt-1">Welcome, {profile?.name || user.email}</h1>
           </div>
-          <SignOutButton />
+          <div className="flex items-center gap-4">
+            {profile?.is_admin && (
+              <a href="/admin" className="text-xs px-3 py-1.5 rounded-md bg-neutral-900 text-white">Admin Setup</a>
+            )}
+            <SignOutButton />
+          </div>
         </div>
 
         <div className="bg-white border border-neutral-200 rounded-lg p-5">
@@ -49,7 +54,9 @@ export default async function Home() {
         </div>
 
         <div className="text-xs text-neutral-400 mt-6">
-          Next: the Admin setup screens (Projects, Suppliers, UOMs, roles, SLA) get built here.
+          {profile?.is_admin
+            ? "Head to Admin Setup above to configure Projects, Suppliers, UOMs, roles, and SLA."
+            : "Next: the Purchase Requisition workflow gets built here."}
         </div>
       </div>
     </div>
