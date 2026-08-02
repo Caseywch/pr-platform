@@ -44,6 +44,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
   const [error, setError] = useState("");
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [editingId, setEditingId] = useState(null);
   const [poDraft, setPoDraft] = useState({});
   const [deliveryDraft, setDeliveryDraft] = useState({});
 
@@ -124,17 +125,6 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
     updatePrLocal(pr.id, data);
     setRejectingId(null);
     setRejectReason("");
-  };
-
-  const resubmit = async (pr) => {
-    const { data, error } = await supabase
-      .from("purchase_requisitions")
-      .update({ status: "pending_verification", rejected_by: null, rejection_reason: null })
-      .eq("id", pr.id)
-      .select()
-      .single();
-    if (error) return setError(error.message);
-    updatePrLocal(pr.id, data);
   };
 
   const issuePo = async (pr) => {
@@ -386,9 +376,26 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
 
                     {/* Requester: resubmit */}
                     {pr.status === "rejected" && pr.requester_id === profile.id && (
-                      <button onClick={() => resubmit(pr)} className={`${btn} text-white`} style={{ background: "#171717" }}>
-                        Resubmit for Verification
-                      </button>
+                      editingId === pr.id ? (
+                        <EditPrForm
+                          supabase={supabase}
+                          pr={pr}
+                          suppliers={suppliers}
+                          uoms={uoms}
+                          initialItems={items || []}
+                          onUpdated={(prId, updatedPr, freshItems) => {
+                            updatePrLocal(prId, updatedPr);
+                            setItemsByPr((prev) => ({ ...prev, [prId]: freshItems }));
+                            setEditingId(null);
+                          }}
+                          onError={setError}
+                          onCancel={() => setEditingId(null)}
+                        />
+                      ) : (
+                        <button onClick={() => setEditingId(pr.id)} className={`${btn} text-white`} style={{ background: "#171717" }}>
+                          Edit & Resubmit
+                        </button>
+                      )
                     )}
                   </div>
                 )}
@@ -420,8 +427,8 @@ function RejectBox({ reason, setReason, onConfirm, onCancel }) {
 }
 
 function NewPrForm({ supabase, eligibleProjects, suppliers, uoms, onCreated, onError }) {
-  const [projectId, setProjectId] = useState(eligibleProjects[0]?.id || "");
-  const [supplierId, setSupplierId] = useState(suppliers[0]?.id || "");
+  const [projectId, setProjectId] = useState("");
+  const [supplierId, setSupplierId] = useState("");
   const [requestDate, setRequestDate] = useState(today());
   const [requiredDate, setRequiredDate] = useState("");
   const [items, setItems] = useState([blankItem()]);
@@ -506,12 +513,14 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, uoms, onCreated, onE
 
       <div className="grid grid-cols-2 gap-2 mb-2">
         <select className={input} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+          <option value="">Please select</option>
           {eligibleProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         {suppliers.length === 0 ? (
           <div className="text-xs text-red-600 flex items-center">No suppliers set up yet.</div>
         ) : (
           <select className={input} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+            <option value="">Please select</option>
             {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         )}
@@ -618,6 +627,226 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, uoms, onCreated, onE
       >
         {submitting ? "Submitting…" : "Submit for Verification"}
       </button>
+    </div>
+  );
+}
+
+function EditPrForm({ supabase, pr, suppliers, uoms, initialItems, onUpdated, onError, onCancel }) {
+  const [supplierId, setSupplierId] = useState(pr.supplier_id || "");
+  const [requestDate, setRequestDate] = useState(pr.request_date);
+  const [requiredDate, setRequiredDate] = useState(pr.required_date);
+  const [items, setItems] = useState(
+    initialItems.length > 0
+      ? initialItems.map((it) => ({
+          itemNumber: it.item_number,
+          description: it.description,
+          sku: it.sku,
+          qty: String(it.qty),
+          uomId: it.uom_id,
+          remark: it.remark || "",
+        }))
+      : [blankItem()]
+  );
+  const [quotationFiles, setQuotationFiles] = useState([]);
+  const [drawings, setDrawings] = useState([]);
+  const [photos, setPhotos] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+
+  const updateItem = (idx, field, val) => {
+    const next = [...items];
+    next[idx] = { ...next[idx], [field]: val };
+    setItems(next);
+  };
+  const removeItem = (idx) => setItems(items.filter((_, i) => i !== idx));
+
+  const requiredDateValid = !requiredDate || requiredDate >= today();
+  const itemsValid = items.length > 0 && items.every(
+    (i) => i.itemNumber.trim() && i.description.trim() && i.sku.trim() && String(i.qty).trim() !== "" && i.uomId
+  );
+  const drawingsValid = drawings.every((d) => d.drawingNumber.trim() && d.revisionNo.trim());
+  const canSubmit = supplierId && requestDate && requiredDate && requiredDateValid && itemsValid && drawingsValid && !submitting;
+
+  const submit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+
+    const { data: prData, error: prError } = await supabase
+      .from("purchase_requisitions")
+      .update({
+        supplier_id: supplierId,
+        request_date: requestDate,
+        required_date: requiredDate,
+        status: "pending_verification",
+        rejected_by: null,
+        rejection_reason: null,
+      })
+      .eq("id", pr.id)
+      .select("*, projects(name, code), suppliers(name)")
+      .single();
+
+    if (prError) {
+      onError(prError.message);
+      setSubmitting(false);
+      return;
+    }
+
+    const { error: deleteError } = await supabase.from("pr_items").delete().eq("pr_id", pr.id);
+    if (deleteError) {
+      onError(deleteError.message);
+      setSubmitting(false);
+      return;
+    }
+
+    const itemRows = items.map((i) => ({
+      pr_id: pr.id,
+      item_number: i.itemNumber.trim(),
+      description: i.description.trim(),
+      sku: i.sku.trim(),
+      qty: Number(i.qty),
+      uom_id: i.uomId,
+      remark: i.remark.trim() || null,
+    }));
+    const { error: itemsError } = await supabase.from("pr_items").insert(itemRows);
+    if (itemsError) {
+      onError(itemsError.message);
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      await uploadAttachments(supabase, pr.id, { quotationFiles, drawings, photos });
+    } catch (attachErr) {
+      onError(attachErr.message + " (the resubmission itself still went through)");
+    }
+
+    const { data: freshItems } = await supabase
+      .from("pr_items")
+      .select("*, uoms(name)")
+      .eq("pr_id", pr.id)
+      .order("item_number");
+
+    setSubmitting(false);
+    onUpdated(pr.id, prData, freshItems || []);
+  };
+
+  return (
+    <div className={card + " mb-2"}>
+      <div className="text-sm font-bold mb-1">Edit & Resubmit</div>
+      <div className="text-xs text-neutral-600 mb-3">
+        {pr.projects?.name} ({pr.projects?.code}) — project can't be changed here.
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        {suppliers.length === 0 ? (
+          <div className="text-xs text-red-600 flex items-center">No suppliers set up yet.</div>
+        ) : (
+          <select className={input} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+            <option value="">Please select</option>
+            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <div>
+          <label className="text-xs text-neutral-600">Request date *</label>
+          <input type="date" className={input + " w-full"} value={requestDate} onChange={(e) => setRequestDate(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs text-neutral-600">Required delivery date *</label>
+          <input
+            type="date"
+            min={today()}
+            className={input + " w-full"}
+            style={{ borderColor: requiredDate && !requiredDateValid ? "#B23A2E" : undefined }}
+            value={requiredDate}
+            onChange={(e) => setRequiredDate(e.target.value)}
+          />
+          {requiredDate && !requiredDateValid && <div className="text-xs text-red-600 mt-1">Cannot be a past date.</div>}
+        </div>
+      </div>
+
+      <div className="text-xs uppercase tracking-wide text-neutral-600 mb-2">Items</div>
+      <div className="flex flex-col gap-3 mb-3">
+        {items.map((it, idx) => (
+          <div key={idx} className="bg-neutral-50 border border-neutral-200 rounded-md p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs uppercase tracking-wide text-neutral-600">Item {idx + 1}</span>
+              {items.length > 1 && (
+                <button onClick={() => removeItem(idx)} className="text-xs text-red-600">Remove</button>
+              )}
+            </div>
+            <input
+              className={input + " w-full mb-2"}
+              placeholder="Description of item *"
+              value={it.description}
+              onChange={(e) => updateItem(idx, "description", e.target.value)}
+            />
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <input
+                className={input}
+                placeholder="Item Number *"
+                value={it.itemNumber}
+                onChange={(e) => updateItem(idx, "itemNumber", e.target.value)}
+              />
+              <input
+                className={input}
+                placeholder="SKU / product code *"
+                value={it.sku}
+                onChange={(e) => updateItem(idx, "sku", e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <input
+                type="number" min="1"
+                className={input}
+                placeholder="Quantity *"
+                value={it.qty}
+                onChange={(e) => updateItem(idx, "qty", e.target.value)}
+              />
+              <select className={input} value={it.uomId} onChange={(e) => updateItem(idx, "uomId", e.target.value)}>
+                <option value="">UOM *</option>
+                {uoms.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+            <input
+              className={input + " w-full"}
+              placeholder="Remark (optional)"
+              value={it.remark}
+              onChange={(e) => updateItem(idx, "remark", e.target.value)}
+            />
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={() => setItems([...items, blankItem()])}
+        className="text-xs w-full py-2 rounded-md border border-dashed border-neutral-300 text-neutral-600 mb-4"
+      >
+        + Add another item
+      </button>
+
+      <div className="text-xs text-neutral-600 mb-2">Add any new supporting files below (existing ones stay attached):</div>
+      <AttachmentPicker
+        quotationFiles={quotationFiles}
+        setQuotationFiles={setQuotationFiles}
+        drawings={drawings}
+        setDrawings={setDrawings}
+        photos={photos}
+        setPhotos={setPhotos}
+        onError={onError}
+      />
+
+      <div className="flex gap-2 mt-4">
+        <button
+          disabled={!canSubmit}
+          onClick={submit}
+          className={`${btn} flex-1 font-medium`}
+          style={{ background: canSubmit ? "#171717" : "#d4d4d4", color: "white" }}
+        >
+          {submitting ? "Submitting…" : "Save & Resubmit for Verification"}
+        </button>
+        <button onClick={onCancel} className={`${btn} border border-neutral-300`}>Cancel</button>
+      </div>
     </div>
   );
 }
