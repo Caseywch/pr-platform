@@ -92,9 +92,9 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
   const verify = async (pr) => {
     const { data, error } = await supabase
       .from("purchase_requisitions")
-      .update({ status: "pending_approval", verified_by: profile.name, verified_date: today() })
+      .update({ status: "pending_approval", verified_by: profile.id, verified_date: today() })
       .eq("id", pr.id)
-      .select()
+      .select("*, verifier:profiles!verified_by(name)")
       .single();
     if (error) return setError(error.message);
     updatePrLocal(pr.id, data);
@@ -103,9 +103,9 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
   const approve = async (pr) => {
     const { data, error } = await supabase
       .from("purchase_requisitions")
-      .update({ status: "pending_po", approved_by: profile.name, approved_date: today() })
+      .update({ status: "pending_po", approved_by: profile.id, approved_date: today() })
       .eq("id", pr.id)
-      .select()
+      .select("*, approver:profiles!approved_by(name)")
       .single();
     if (error) return setError(error.message);
     updatePrLocal(pr.id, data);
@@ -292,8 +292,8 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                     )}
 
                     <div className="text-xs text-neutral-600 mb-3 flex flex-col gap-0.5">
-                      {pr.verified_by && <div>Verified by {pr.verified_by} on {pr.verified_date}</div>}
-                      {pr.approved_by && <div>Approved by {pr.approved_by} on {pr.approved_date}</div>}
+                      {pr.verified_by && <div>Verified by {pr.verifier?.name || "—"} on {pr.verified_date}</div>}
+                      {pr.approved_by && <div>Approved by {pr.approver?.name || "—"} on {pr.approved_date}</div>}
                       {pr.po_number && <div>PO {pr.po_number} issued {pr.po_date}</div>}
                       {(deliveries || []).map((d) => (
                         <div key={d.id}>DO {d.do_number} — {d.type === "complete" ? "Complete" : "Partial"} delivery on {d.delivery_date}</div>
