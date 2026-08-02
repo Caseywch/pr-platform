@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { AttachmentPicker, uploadAttachments, AttachmentsDisplay } from "./Attachments";
 
 const STATUS_META = {
   pending_verification: { label: "Pending Verification", color: "#A6791E" },
@@ -291,6 +292,8 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                       </table>
                     )}
 
+                    {isOpen && <AttachmentsDisplay supabase={supabase} prId={pr.id} />}
+
                     <div className="text-xs text-neutral-600 mb-3 flex flex-col gap-0.5">
                       {pr.verified_by && <div>Verified by {pr.verifier?.name || "—"} on {pr.verified_date}</div>}
                       {pr.approved_by && <div>Approved by {pr.approver?.name || "—"} on {pr.approved_date}</div>}
@@ -422,6 +425,9 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, uoms, onCreated, onE
   const [requestDate, setRequestDate] = useState(today());
   const [requiredDate, setRequiredDate] = useState("");
   const [items, setItems] = useState([blankItem()]);
+  const [quotationFiles, setQuotationFiles] = useState([]);
+  const [drawings, setDrawings] = useState([]);
+  const [photos, setPhotos] = useState([]);
   const [submitting, setSubmitting] = useState(false);
 
   const updateItem = (idx, field, val) => {
@@ -435,7 +441,8 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, uoms, onCreated, onE
   const itemsValid = items.length > 0 && items.every(
     (i) => i.itemNumber.trim() && i.description.trim() && i.sku.trim() && String(i.qty).trim() !== "" && i.uomId
   );
-  const canSubmit = projectId && supplierId && requestDate && requiredDate && requiredDateValid && itemsValid && !submitting;
+  const drawingsValid = drawings.every((d) => d.drawingNumber.trim() && d.revisionNo.trim());
+  const canSubmit = projectId && supplierId && requestDate && requiredDate && requiredDateValid && itemsValid && drawingsValid && !submitting;
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -473,6 +480,12 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, uoms, onCreated, onE
       onError(itemsError.message);
       setSubmitting(false);
       return;
+    }
+
+    try {
+      await uploadAttachments(supabase, prData.id, { quotationFiles, drawings, photos });
+    } catch (attachErr) {
+      onError(attachErr.message + " (the requisition itself was still created successfully)");
     }
 
     setSubmitting(false);
@@ -587,10 +600,20 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, uoms, onCreated, onE
         + Add another item
       </button>
 
+      <AttachmentPicker
+        quotationFiles={quotationFiles}
+        setQuotationFiles={setQuotationFiles}
+        drawings={drawings}
+        setDrawings={setDrawings}
+        photos={photos}
+        setPhotos={setPhotos}
+        onError={onError}
+      />
+
       <button
         disabled={!canSubmit}
         onClick={submit}
-        className={`${btn} w-full font-medium`}
+        className={`${btn} w-full font-medium mt-4`}
         style={{ background: canSubmit ? "#171717" : "#d4d4d4", color: "white" }}
       >
         {submitting ? "Submitting…" : "Submit for Verification"}
