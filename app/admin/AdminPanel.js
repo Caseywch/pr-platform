@@ -44,10 +44,10 @@ export default function AdminPanel({
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between border-b border-neutral-200 pb-4 mb-6">
           <div>
-            <div className="text-xs uppercase tracking-widest text-neutral-500">Purchase Requisition Platform</div>
+            <div className="text-xs uppercase tracking-widest text-neutral-600">Purchase Requisition Platform</div>
             <h1 className="text-2xl font-bold mt-1">Admin Setup</h1>
           </div>
-          <a href="/" className="text-xs underline text-neutral-500">Back to app</a>
+          <a href="/" className="text-xs underline text-neutral-600">Back to app</a>
         </div>
 
         {error && <div className="text-xs text-red-600 bg-red-50 rounded-md px-3 py-2 mb-4">{error}</div>}
@@ -106,7 +106,7 @@ function UsersTab({ supabase, profiles, setProfiles, fail }) {
 
   return (
     <div className={card}>
-      <div className="text-xs text-neutral-500 mb-4">
+      <div className="text-xs text-neutral-600 mb-4">
         People show up here once they've signed up on the platform. Toggle their access below.
       </div>
       <div className="flex flex-col gap-2">
@@ -114,7 +114,7 @@ function UsersTab({ supabase, profiles, setProfiles, fail }) {
           <div key={p.id} className="flex items-center justify-between border border-neutral-200 rounded-md px-3 py-2">
             <div>
               <div className="text-sm font-medium">{p.name}</div>
-              <div className="text-xs text-neutral-500">{p.email}</div>
+              <div className="text-xs text-neutral-600">{p.email}</div>
             </div>
             <div className="flex gap-4 text-xs">
               <label className="flex items-center gap-1.5">
@@ -132,7 +132,7 @@ function UsersTab({ supabase, profiles, setProfiles, fail }) {
             </div>
           </div>
         ))}
-        {profiles.length === 0 && <div className="text-sm text-neutral-500">No one has signed up yet.</div>}
+        {profiles.length === 0 && <div className="text-sm text-neutral-600">No one has signed up yet.</div>}
       </div>
     </div>
   );
@@ -201,11 +201,11 @@ function ProjectsTab({ supabase, projects, setProjects, profiles, projectRoles, 
         <div className="flex flex-col gap-1.5">
           {projects.map((p) => (
             <div key={p.id} className="flex items-center justify-between bg-neutral-50 rounded-md px-3 py-2 text-sm">
-              <span>{p.name} <span className="text-neutral-500 text-xs">({p.code})</span></span>
+              <span>{p.name} <span className="text-neutral-600 text-xs">({p.code})</span></span>
               <button onClick={() => removeProject(p.id)} className="text-xs text-red-600">Remove</button>
             </div>
           ))}
-          {projects.length === 0 && <div className="text-sm text-neutral-500">No projects yet.</div>}
+          {projects.length === 0 && <div className="text-sm text-neutral-600">No projects yet.</div>}
         </div>
       </div>
 
@@ -218,7 +218,7 @@ function ProjectsTab({ supabase, projects, setProjects, profiles, projectRoles, 
 
           {["requester", "verifier", "approver"].map((role) => (
             <div key={role} className="mb-4">
-              <div className="text-xs uppercase tracking-wide text-neutral-500 mb-1.5">{role}s</div>
+              <div className="text-xs uppercase tracking-wide text-neutral-600 mb-1.5">{role}s</div>
               <div className="flex flex-wrap gap-1.5 mb-1.5">
                 {rolesFor(role).map((r) => (
                   <span key={r.user_id} className="text-xs bg-neutral-100 rounded-full px-2.5 py-1 flex items-center gap-1.5">
@@ -226,7 +226,7 @@ function ProjectsTab({ supabase, projects, setProjects, profiles, projectRoles, 
                     <button onClick={() => removeRole(role, r.user_id)}>×</button>
                   </span>
                 ))}
-                {rolesFor(role).length === 0 && <span className="text-xs text-neutral-400">Anyone with this role can act (unrestricted).</span>}
+                {rolesFor(role).length === 0 && <span className="text-xs text-neutral-600">Anyone with this role can act (unrestricted).</span>}
               </div>
               <div className="flex gap-2">
                 <select
@@ -286,7 +286,7 @@ function ListTab({ supabase, table, items, setItems, label, fail }) {
             <button onClick={() => remove(i.id)}>×</button>
           </span>
         ))}
-        {items.length === 0 && <span className="text-xs text-neutral-400">None yet.</span>}
+        {items.length === 0 && <span className="text-xs text-neutral-600">None yet.</span>}
       </div>
     </div>
   );
@@ -316,7 +316,7 @@ function SlaTab({ supabase, sla, setSla, fail }) {
       <div className="text-sm font-bold mb-3">SLA — Working Days</div>
       <div className="grid grid-cols-3 gap-3 mb-4">
         <div>
-          <label className="text-xs text-neutral-500">To Verify</label>
+          <label className="text-xs text-neutral-600">To Verify</label>
           <input
             type="number" min="0"
             className={`${input} w-full`}
@@ -325,7 +325,7 @@ function SlaTab({ supabase, sla, setSla, fail }) {
           />
         </div>
         <div>
-          <label className="text-xs text-neutral-500">To Approve</label>
+          <label className="text-xs text-neutral-600">To Approve</label>
           <input
             type="number" min="0"
             className={`${input} w-full`}
@@ -334,7 +334,7 @@ function SlaTab({ supabase, sla, setSla, fail }) {
           />
         </div>
         <div>
-          <label className="text-xs text-neutral-500">To Issue PO</label>
+          <label className="text-xs text-neutral-600">To Issue PO</label>
           <input
             type="number" min="0"
             className={`${input} w-full`}
