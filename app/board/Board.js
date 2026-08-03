@@ -23,7 +23,14 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
   const [rejectReason, setRejectReason] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [poDraft, setPoDraft] = useState({});
+  const [poDateDraft, setPoDateDraft] = useState({});
   const [deliveryDraft, setDeliveryDraft] = useState({});
+  const [postponeDraft, setPostponeDraft] = useState({});
+  const [cancelDraft, setCancelDraft] = useState({});
+  const [cancellingId, setCancellingId] = useState(null);
+  const [postponingId, setPostponingId] = useState(null);
+  const [adminEditId, setAdminEditId] = useState(null);
+  const [eventsByPr, setEventsByPr] = useState({});
 
   const projectName = (pr) => pr.projects?.name || "Unknown project";
   const projectCode = (pr) => pr.projects?.code || "";
@@ -34,6 +41,19 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
   const counts = {};
   Object.keys(STATUS_META).forEach((k) => (counts[k] = 0));
   prs.forEach((p) => (counts[p.status] = (counts[p.status] || 0) + 1));
+
+  // Every notable change is written to a single history trail so the PR can
+  // explain its own past: who changed what, when, and why.
+  const logEvent = async (prId, eventType, detail) => {
+    const { data, error } = await supabase
+      .from("pr_events")
+      .insert({ pr_id: prId, actor_id: profile.id, event_type: eventType, detail })
+      .select()
+      .single();
+    if (!error && data) {
+      setEventsByPr((prev) => ({ ...prev, [prId]: [...(prev[prId] || []), data] }));
+    }
+  };
 
   const updatePrLocal = (id, patch) => setPrs(prs.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
@@ -51,6 +71,14 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
         .order("item_number");
       if (error) { setError(error.message); return; }
       setItemsByPr((prev) => ({ ...prev, [pr.id]: data || [] }));
+    }
+    if (!eventsByPr[pr.id]) {
+      const { data } = await supabase
+        .from("pr_events")
+        .select("*")
+        .eq("pr_id", pr.id)
+        .order("created_at");
+      setEventsByPr((prev) => ({ ...prev, [pr.id]: data || [] }));
     }
     if (!deliveriesByPr[pr.id]) {
       const { data, error } = await supabase
@@ -107,15 +135,86 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
   const issuePo = async (pr) => {
     const poNumber = poDraft[pr.id];
     if (!poNumber?.trim()) return;
+    // The supplier's committed date, if the Purchaser has one. This becomes the
+    // benchmark that On-time / Delay is judged against from here on.
+    const confirmedDate = poDateDraft[pr.id] || null;
+    const patch = { status: "po_issued", po_number: poNumber.trim(), po_date: today() };
+    if (confirmedDate) patch.new_delivery_date = confirmedDate;
     const { data, error } = await supabase
       .from("purchase_requisitions")
-      .update({ status: "po_issued", po_number: poNumber.trim(), po_date: today() })
+      .update(patch)
       .eq("id", pr.id)
       .select()
       .single();
     if (error) return setError(error.message);
     updatePrLocal(pr.id, data);
+    await logEvent(
+      pr.id,
+      "po_issued",
+      confirmedDate
+        ? `PO ${poNumber.trim()} issued; delivery confirmed for ${confirmedDate}`
+        : `PO ${poNumber.trim()} issued`
+    );
+    setPoDateDraft((prev) => ({ ...prev, [pr.id]: "" }));
     setPoDraft((prev) => ({ ...prev, [pr.id]: "" }));
+  };
+
+  // A postponement records slippage without moving the benchmark, so a
+  // supplier who keeps pushing the date back still shows as Delayed.
+  const postponeDelivery = async (pr) => {
+    const d = postponeDraft[pr.id] || {};
+    if (!d.date || !d.reason?.trim()) return;
+    const { data, error } = await supabase
+      .from("purchase_requisitions")
+      .update({ postponed_delivery_date: d.date })
+      .eq("id", pr.id)
+      .select()
+      .single();
+    if (error) return setError(error.message);
+    updatePrLocal(pr.id, data);
+    await logEvent(pr.id, "postponed", `Delivery postponed to ${d.date} — ${d.reason.trim()}`);
+    setPostponeDraft((prev) => ({ ...prev, [pr.id]: { date: "", reason: "" } }));
+    setPostponingId(null);
+  };
+
+  const cancelPr = async (pr) => {
+    const reason = (cancelDraft[pr.id] || "").trim();
+    if (!reason) return;
+    const { data, error } = await supabase
+      .from("purchase_requisitions")
+      .update({
+        status: "cancelled",
+        cancelled_by: profile.id,
+        cancelled_at: new Date().toISOString(),
+        cancellation_reason: reason,
+      })
+      .eq("id", pr.id)
+      .select()
+      .single();
+    if (error) return setError(error.message);
+    updatePrLocal(pr.id, data);
+    // Remember where it was so it can be put back exactly there.
+    await logEvent(pr.id, "cancelled", `from:${pr.status}|${reason}`);
+    setCancelDraft((prev) => ({ ...prev, [pr.id]: "" }));
+    setCancellingId(null);
+  };
+
+  const reinstatePr = async (pr) => {
+    const events = eventsByPr[pr.id] || [];
+    const lastCancel = [...events].reverse().find((e) => e.event_type === "cancelled");
+    const priorStatus =
+      lastCancel && lastCancel.detail?.startsWith("from:")
+        ? lastCancel.detail.slice(5).split("|")[0]
+        : "pending_verification";
+    const { data, error } = await supabase
+      .from("purchase_requisitions")
+      .update({ status: priorStatus, cancelled_by: null, cancelled_at: null, cancellation_reason: null })
+      .eq("id", pr.id)
+      .select()
+      .single();
+    if (error) return setError(error.message);
+    updatePrLocal(pr.id, data);
+    await logEvent(pr.id, "reinstated", `Reinstated to ${STATUS_META[priorStatus]?.label || priorStatus}`);
   };
 
   const logDelivery = async (pr) => {
@@ -324,14 +423,28 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
 
                     {/* Purchasing: issue PO */}
                     {pr.status === "pending_po" && profile.is_purchasing && (
-                      <div className="flex gap-2">
-                        <input
-                          className={input + " flex-1"}
-                          placeholder="PO number"
-                          value={poDraft[pr.id] || ""}
-                          onChange={(e) => setPoDraft({ ...poDraft, [pr.id]: e.target.value })}
-                        />
-                        <button onClick={() => issuePo(pr)} className={`${btn} text-white shrink-0`} style={{ background: "#1F6B63" }}>Issue PO</button>
+                      <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3">
+                        <div className="text-xs uppercase tracking-wide text-neutral-600 mb-2">Issue purchase order</div>
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                          <input
+                            className={input + " text-xs"}
+                            placeholder="PO number *"
+                            value={poDraft[pr.id] || ""}
+                            onChange={(e) => setPoDraft({ ...poDraft, [pr.id]: e.target.value })}
+                          />
+                          <div>
+                            <input
+                              type="date"
+                              className={input + " text-xs w-full"}
+                              value={poDateDraft[pr.id] || ""}
+                              onChange={(e) => setPoDateDraft({ ...poDateDraft, [pr.id]: e.target.value })}
+                            />
+                            <div className="text-xs text-neutral-600 mt-1">
+                              New delivery date (optional) — leave blank to keep {pr.required_date}
+                            </div>
+                          </div>
+                        </div>
+                        <button onClick={() => issuePo(pr)} className={`${btn} text-white`} style={{ background: "#1F6B63" }}>Issue PO</button>
                       </div>
                     )}
 
@@ -365,6 +478,117 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                           </label>
                         </div>
                         <button onClick={() => logDelivery(pr)} className={`${btn} text-white`} style={{ background: "#1F6B63" }}>Save delivery record</button>
+                      </div>
+                    )}
+
+                    {/* Administrator: correct details at any stage before fulfilment */}
+                    {profile.is_admin && !["fulfilled", "cancelled"].includes(pr.status) && pr.status !== "rejected" && (
+                      adminEditId === pr.id ? (
+                        <EditPrForm
+                          supabase={supabase}
+                          pr={pr}
+                          suppliers={suppliers}
+                          uoms={uoms}
+                          initialItems={items || []}
+                          adminMode
+                          onUpdated={(prId, updatedPr, freshItems) => {
+                            updatePrLocal(prId, updatedPr);
+                            setItemsByPr((prev) => ({ ...prev, [prId]: freshItems }));
+                            setAdminEditId(null);
+                            logEvent(prId, "admin_edit", `Details amended by ${profile.name}`);
+                          }}
+                          onError={setError}
+                          onCancel={() => setAdminEditId(null)}
+                        />
+                      ) : (
+                        <button onClick={() => setAdminEditId(pr.id)} className={`${btn} border mt-2`} style={{ borderColor: "#34456B", color: "#34456B" }}>
+                          Edit details (Admin)
+                        </button>
+                      )
+                    )}
+
+                    {/* Purchasing: postpone an agreed delivery */}
+                    {(pr.status === "po_issued" || pr.status === "partial_delivery") && profile.is_purchasing && (
+                      postponingId === pr.id ? (
+                        <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3 mt-2">
+                          <div className="text-xs uppercase tracking-wide text-neutral-600 mb-2">Postpone delivery</div>
+                          <div className="text-xs text-neutral-600 mb-2">
+                            This records the supplier&apos;s new promise. It does not change the date this PR is
+                            measured against, so a genuine delay stays visible.
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 mb-2">
+                            <input
+                              type="date"
+                              className={input + " text-xs"}
+                              value={(postponeDraft[pr.id] || {}).date || ""}
+                              onChange={(e) => setPostponeDraft({ ...postponeDraft, [pr.id]: { ...(postponeDraft[pr.id] || {}), date: e.target.value } })}
+                            />
+                            <input
+                              className={input + " text-xs"}
+                              placeholder="Reason *"
+                              value={(postponeDraft[pr.id] || {}).reason || ""}
+                              onChange={(e) => setPostponeDraft({ ...postponeDraft, [pr.id]: { ...(postponeDraft[pr.id] || {}), reason: e.target.value } })}
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => postponeDelivery(pr)} className={`${btn} text-white`} style={{ background: "#9C6B14" }}>Save postponement</button>
+                            <button onClick={() => setPostponingId(null)} className={`${btn} border border-neutral-300`}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => setPostponingId(pr.id)} className={`${btn} border mt-2`} style={{ borderColor: "#9C6B14", color: "#9C6B14" }}>
+                          Postpone delivery
+                        </button>
+                      )
+                    )}
+
+                    {/* Administrator: cancel before a PO exists, or put one back */}
+                    {profile.is_admin && ["pending_verification", "rejected", "pending_approval", "pending_po"].includes(pr.status) && (
+                      cancellingId === pr.id ? (
+                        <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3 mt-2">
+                          <div className="text-xs text-neutral-600 mb-2">Why is this requisition being cancelled?</div>
+                          <div className="flex gap-2">
+                            <input
+                              className={input + " text-xs flex-1"}
+                              placeholder="Reason for cancellation *"
+                              value={cancelDraft[pr.id] || ""}
+                              onChange={(e) => setCancelDraft({ ...cancelDraft, [pr.id]: e.target.value })}
+                            />
+                            <button
+                              onClick={() => cancelPr(pr)}
+                              disabled={!(cancelDraft[pr.id] || "").trim()}
+                              className={`${btn} shrink-0`}
+                              style={{ background: (cancelDraft[pr.id] || "").trim() ? "#B23A2E" : "#d4d4d4", color: "white" }}
+                            >
+                              Confirm cancel
+                            </button>
+                            <button onClick={() => setCancellingId(null)} className={`${btn} border border-neutral-300 shrink-0`}>Back</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => setCancellingId(pr.id)} className={`${btn} border mt-2`} style={{ borderColor: "#B23A2E", color: "#B23A2E" }}>
+                          Cancel requisition
+                        </button>
+                      )
+                    )}
+
+                    {profile.is_admin && pr.status === "cancelled" && (
+                      <button onClick={() => reinstatePr(pr)} className={`${btn} text-white mt-2`} style={{ background: "#171717" }}>
+                        Reinstate requisition
+                      </button>
+                    )}
+
+                    {/* History trail */}
+                    {(eventsByPr[pr.id] || []).length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-neutral-100">
+                        <div className="text-xs uppercase tracking-wide text-neutral-600 mb-1.5">History</div>
+                        <div className="flex flex-col gap-1">
+                          {(eventsByPr[pr.id] || []).map((ev) => (
+                            <div key={ev.id} className="text-xs text-neutral-600">
+                              {new Date(ev.created_at).toLocaleDateString()} — {ev.detail || ev.event_type}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
 
@@ -713,7 +937,7 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, setSuppliers, uoms, 
   );
 }
 
-function EditPrForm({ supabase, pr, suppliers, uoms, initialItems, onUpdated, onError, onCancel }) {
+function EditPrForm({ supabase, pr, suppliers, uoms, initialItems, onUpdated, onError, onCancel, adminMode = false }) {
   const [supplierId, setSupplierId] = useState(pr.supplier_id || "");
   const [itemLimitNotice, setItemLimitNotice] = useState("");
   const [requestDate, setRequestDate] = useState(pr.request_date);
@@ -755,14 +979,18 @@ function EditPrForm({ supabase, pr, suppliers, uoms, initialItems, onUpdated, on
 
     const { data: prData, error: prError } = await supabase
       .from("purchase_requisitions")
-      .update({
-        supplier_id: supplierId,
-        request_date: requestDate,
-        required_date: requiredDate,
-        status: "pending_verification",
-        rejected_by: null,
-        rejection_reason: null,
-      })
+      .update(
+        adminMode
+          ? { supplier_id: supplierId, request_date: requestDate, required_date: requiredDate }
+          : {
+              supplier_id: supplierId,
+              request_date: requestDate,
+              required_date: requiredDate,
+              status: "pending_verification",
+              rejected_by: null,
+              rejection_reason: null,
+            }
+      )
       .eq("id", pr.id)
       .select("*, projects(name, code), suppliers(name)")
       .single();
@@ -814,7 +1042,7 @@ function EditPrForm({ supabase, pr, suppliers, uoms, initialItems, onUpdated, on
 
   return (
     <div className={card + " mb-2"}>
-      <div className="text-sm font-bold mb-1">Edit & Resubmit</div>
+      <div className="text-sm font-bold mb-1">{adminMode ? "Edit details" : "Edit & Resubmit"}</div>
       <div className="text-xs text-neutral-600 mb-3">
         {pr.projects?.name} ({pr.projects?.code}) — project can't be changed here.
       </div>
@@ -969,7 +1197,7 @@ function EditPrForm({ supabase, pr, suppliers, uoms, initialItems, onUpdated, on
           className={`${btn} flex-1 font-medium`}
           style={{ background: canSubmit ? "#171717" : "#d4d4d4", color: "white" }}
         >
-          {submitting ? "Submitting…" : "Save & Resubmit for Verification"}
+          {submitting ? "Saving…" : adminMode ? "Save changes" : "Save & Resubmit for Verification"}
         </button>
         <button onClick={onCancel} className={`${btn} border border-neutral-300`}>Cancel</button>
       </div>
