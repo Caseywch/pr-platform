@@ -3,39 +3,16 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { AttachmentPicker, uploadAttachments, AttachmentsDisplay } from "./Attachments";
+import {
+  MAX_ITEMS, STATUS_META, btn, input, card, today, blankItem,
+  canActAs, projectHasRole, benchmarkDate, timeliness, timelinessMeta,
+  findSimilarSupplier,
+} from "./prHelpers";
 
-const STATUS_META = {
-  pending_verification: { label: "Pending Verification", color: "#A6791E" },
-  rejected: { label: "Needs Revision", color: "#B23A2E" },
-  pending_approval: { label: "Pending Approval", color: "#34456B" },
-  pending_po: { label: "Approved — Pending PO", color: "#1F6B63" },
-  po_issued: { label: "PO Issued — Awaiting Delivery", color: "#8A3B1F" },
-  partial_delivery: { label: "Partial Delivery — Outstanding", color: "#9C6B14" },
-  fulfilled: { label: "Fulfilled", color: "#3F7D4F" },
-};
-
-function today() {
-  return new Date().toISOString().slice(0, 10);
-}
-function blankItem() {
-  return { itemNumber: "", description: "", sku: "", qty: "", uomId: "", remark: "" };
-}
-function canActAs(allProjectRoles, projectId, role, userId) {
-  const assigned = allProjectRoles.filter((r) => r.project_id === projectId && r.role === role);
-  if (assigned.length === 0) return true;
-  return assigned.some((r) => r.user_id === userId);
-}
-function assignedNames(allProjectRoles, projectId, role) {
-  return allProjectRoles.filter((r) => r.project_id === projectId && r.role === role).map((r) => r.user_id);
-}
-
-const btn = "text-sm px-3 py-1.5 rounded-md";
-const input = "border border-neutral-300 rounded-md px-3 py-2 text-sm";
-const card = "bg-white border border-neutral-200 rounded-lg p-5";
-
-export default function Board({ profile, initialPrs, allProjects, eligibleProjects, suppliers, uoms, allProjectRoles }) {
+export default function Board({ profile, initialPrs, allProjects, eligibleProjects, suppliers: initialSuppliers, uoms, allProjectRoles, sla }) {
   const supabase = createClient();
   const [prs, setPrs] = useState(initialPrs);
+  const [suppliers, setSuppliers] = useState(initialSuppliers);
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [itemsByPr, setItemsByPr] = useState({});
@@ -217,7 +194,10 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
             supabase={supabase}
             eligibleProjects={eligibleProjects}
             suppliers={suppliers}
+            setSuppliers={setSuppliers}
             uoms={uoms}
+            allProjectRoles={allProjectRoles}
+            profile={profile}
             onCreated={onCreated}
             onError={setError}
           />
@@ -229,8 +209,8 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
             const isOpen = expandedId === pr.id;
             const items = itemsByPr[pr.id];
             const deliveries = deliveriesByPr[pr.id];
-            const canVerify = canActAs(allProjectRoles, pr.project_id, "verifier", profile.id);
-            const canApprove = canActAs(allProjectRoles, pr.project_id, "approver", profile.id);
+            const canVerify = canActAs(allProjectRoles, pr.project_id, "verifier", profile.id, profile.is_admin);
+            const canApprove = canActAs(allProjectRoles, pr.project_id, "approver", profile.id, profile.is_admin);
             const draft = deliveryDraft[pr.id] || { doNumber: "", deliveryDate: today(), type: "complete" };
 
             return (
@@ -244,8 +224,21 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                       {supplierName(pr)} · required by {pr.required_date}
                     </div>
                   </div>
-                  <span className="text-xs px-2 py-1 rounded-full shrink-0 ml-3" style={{ background: `${meta.color}14`, color: meta.color }}>
-                    {meta.label}
+                  <span className="flex items-center gap-1.5 shrink-0 ml-3">
+                    {timelinessMeta(timeliness(pr, sla)) && (
+                      <span
+                        className="text-xs px-2 py-1 rounded-full"
+                        style={{
+                          background: `${timelinessMeta(timeliness(pr, sla)).color}14`,
+                          color: timelinessMeta(timeliness(pr, sla)).color,
+                        }}
+                      >
+                        {timelinessMeta(timeliness(pr, sla)).label}
+                      </span>
+                    )}
+                    <span className="text-xs px-2 py-1 rounded-full" style={{ background: `${meta.color}14`, color: meta.color }}>
+                      {meta.label}
+                    </span>
                   </span>
                 </button>
 
@@ -427,9 +420,12 @@ function RejectBox({ reason, setReason, onConfirm, onCancel }) {
   );
 }
 
-function NewPrForm({ supabase, eligibleProjects, suppliers, uoms, onCreated, onError }) {
+function NewPrForm({ supabase, eligibleProjects, suppliers, setSuppliers, uoms, allProjectRoles, profile, onCreated, onError }) {
   const [projectId, setProjectId] = useState("");
   const [supplierId, setSupplierId] = useState("");
+  const [newSupplierName, setNewSupplierName] = useState("");
+  const [dupeWarning, setDupeWarning] = useState(null);
+  const [itemLimitNotice, setItemLimitNotice] = useState("");
   const [requestDate, setRequestDate] = useState(today());
   const [requiredDate, setRequiredDate] = useState("");
   const [items, setItems] = useState([blankItem()]);
@@ -450,17 +446,51 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, uoms, onCreated, onE
     (i) => i.itemNumber.trim() && i.description.trim() && i.sku.trim() && String(i.qty).trim() !== "" && i.uomId
   );
   const drawingsValid = drawings.every((d) => d.drawingNumber.trim() && d.revisionNo.trim());
-  const canSubmit = projectId && supplierId && requestDate && requiredDate && requiredDateValid && itemsValid && drawingsValid && !submitting;
+  // A project with nobody assigned to verify or approve would strand the PR,
+  // so we stop it being raised rather than letting it dead-end.
+  const missingRoles = [];
+  if (projectId) {
+    if (!projectHasRole(allProjectRoles, projectId, "verifier")) missingRoles.push("Verifier");
+    if (!projectHasRole(allProjectRoles, projectId, "approver")) missingRoles.push("Approver");
+  }
+  const rolesReady = projectId && missingRoles.length === 0;
+
+  const supplierChosen = supplierId === "__new__" ? newSupplierName.trim().length > 0 : !!supplierId;
+  const canSubmit = projectId && supplierChosen && rolesReady && requestDate && requiredDate && requiredDateValid && itemsValid && drawingsValid && !submitting;
 
   const submit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     const { data: userData } = await supabase.auth.getUser();
+
+    // A supplier the Requester typed in is created as "pending": usable on this
+    // PR straight away, but hidden from everyone else until an Admin approves it.
+    let effectiveSupplierId = supplierId;
+    if (supplierId === "__new__") {
+      const { data: newSup, error: supErr } = await supabase
+        .from("suppliers")
+        .insert({
+          name: newSupplierName.trim(),
+          status: "pending",
+          proposed_by: userData.user.id,
+          proposed_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+      if (supErr) {
+        onError(supErr.message);
+        setSubmitting(false);
+        return;
+      }
+      effectiveSupplierId = newSup.id;
+      setSuppliers([...suppliers, newSup]);
+    }
+
     const { data: prData, error: prError } = await supabase
       .from("purchase_requisitions")
       .insert({
         project_id: projectId,
-        supplier_id: supplierId,
+        supplier_id: effectiveSupplierId,
         requester_id: userData.user.id,
         request_date: requestDate,
         required_date: requiredDate,
@@ -517,15 +547,56 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, uoms, onCreated, onE
           <option value="">Please select</option>
           {eligibleProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        {suppliers.length === 0 ? (
-          <div className="text-xs text-red-600 flex items-center">No suppliers set up yet.</div>
-        ) : (
-          <select className={input} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-            <option value="">Please select</option>
-            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        )}
+        <select
+          className={input}
+          value={supplierId}
+          onChange={(e) => { setSupplierId(e.target.value); setDupeWarning(null); }}
+        >
+          <option value="">Please select</option>
+          {suppliers.filter((s) => s.status !== "pending").map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+          <option value="__new__">+ Add a new supplier…</option>
+        </select>
       </div>
+
+      {supplierId === "__new__" && (
+        <div className="mb-2">
+          <input
+            className={input + " w-full"}
+            placeholder="New supplier name *"
+            value={newSupplierName}
+            onChange={(e) => {
+              const v = e.target.value;
+              setNewSupplierName(v);
+              setDupeWarning(findSimilarSupplier(suppliers, v));
+            }}
+          />
+          {dupeWarning && (
+            <div className="text-xs px-3 py-2 rounded-md mt-1 bg-amber-50 text-amber-700">
+              Did you mean <strong>{dupeWarning.name}</strong>?{" "}
+              <button
+                onClick={() => { setSupplierId(dupeWarning.id); setNewSupplierName(""); setDupeWarning(null); }}
+                className="underline"
+              >
+                Use that one instead
+              </button>
+            </div>
+          )}
+          <div className="text-xs text-neutral-600 mt-1">
+            This supplier will be usable on this requisition right away, and will appear for
+            everyone else once an Administrator approves it.
+          </div>
+        </div>
+      )}
+
+      {projectId && missingRoles.length > 0 && (
+        <div className="text-xs px-3 py-2 rounded-md mb-3 bg-red-50 text-red-600">
+          This project has no {missingRoles.join(" and ")} assigned, so a requisition would have
+          nobody to action it. Ask your Administrator to assign {missingRoles.length > 1 ? "them" : "one"} in
+          Admin Setup → Projects &amp; Roles.
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div>
@@ -603,8 +674,18 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, uoms, onCreated, onE
           </div>
         ))}
       </div>
+      {itemLimitNotice && (
+        <div className="text-xs px-3 py-2 rounded-md mb-2 bg-amber-50 text-amber-700">{itemLimitNotice}</div>
+      )}
       <button
-        onClick={() => setItems([...items, blankItem()])}
+        onClick={() => {
+          if (items.length >= MAX_ITEMS) {
+            setItemLimitNotice(`A requisition can have up to ${MAX_ITEMS} items. Please raise a separate requisition for anything further.`);
+            return;
+          }
+          setItemLimitNotice("");
+          setItems([...items, blankItem()]);
+        }}
         className="text-xs w-full py-2 rounded-md border border-dashed border-neutral-300 text-neutral-600 mb-4"
       >
         + Add another item
@@ -634,6 +715,7 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, uoms, onCreated, onE
 
 function EditPrForm({ supabase, pr, suppliers, uoms, initialItems, onUpdated, onError, onCancel }) {
   const [supplierId, setSupplierId] = useState(pr.supplier_id || "");
+  const [itemLimitNotice, setItemLimitNotice] = useState("");
   const [requestDate, setRequestDate] = useState(pr.request_date);
   const [requiredDate, setRequiredDate] = useState(pr.required_date);
   const [items, setItems] = useState(
@@ -738,15 +820,48 @@ function EditPrForm({ supabase, pr, suppliers, uoms, initialItems, onUpdated, on
       </div>
 
       <div className="grid grid-cols-2 gap-2 mb-2">
-        {suppliers.length === 0 ? (
-          <div className="text-xs text-red-600 flex items-center">No suppliers set up yet.</div>
-        ) : (
-          <select className={input} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-            <option value="">Please select</option>
-            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        )}
+        <select
+          className={input}
+          value={supplierId}
+          onChange={(e) => { setSupplierId(e.target.value); setDupeWarning(null); }}
+        >
+          <option value="">Please select</option>
+          {suppliers.filter((s) => s.status !== "pending").map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+          <option value="__new__">+ Add a new supplier…</option>
+        </select>
       </div>
+
+      {supplierId === "__new__" && (
+        <div className="mb-2">
+          <input
+            className={input + " w-full"}
+            placeholder="New supplier name *"
+            value={newSupplierName}
+            onChange={(e) => {
+              const v = e.target.value;
+              setNewSupplierName(v);
+              setDupeWarning(findSimilarSupplier(suppliers, v));
+            }}
+          />
+          {dupeWarning && (
+            <div className="text-xs px-3 py-2 rounded-md mt-1 bg-amber-50 text-amber-700">
+              Did you mean <strong>{dupeWarning.name}</strong>?{" "}
+              <button
+                onClick={() => { setSupplierId(dupeWarning.id); setNewSupplierName(""); setDupeWarning(null); }}
+                className="underline"
+              >
+                Use that one instead
+              </button>
+            </div>
+          )}
+          <div className="text-xs text-neutral-600 mt-1">
+            This supplier will be usable on this requisition right away, and will appear for
+            everyone else once an Administrator approves it.
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div>
@@ -819,8 +934,18 @@ function EditPrForm({ supabase, pr, suppliers, uoms, initialItems, onUpdated, on
           </div>
         ))}
       </div>
+      {itemLimitNotice && (
+        <div className="text-xs px-3 py-2 rounded-md mb-2 bg-amber-50 text-amber-700">{itemLimitNotice}</div>
+      )}
       <button
-        onClick={() => setItems([...items, blankItem()])}
+        onClick={() => {
+          if (items.length >= MAX_ITEMS) {
+            setItemLimitNotice(`A requisition can have up to ${MAX_ITEMS} items. Please raise a separate requisition for anything further.`);
+            return;
+          }
+          setItemLimitNotice("");
+          setItems([...items, blankItem()]);
+        }}
         className="text-xs w-full py-2 rounded-md border border-dashed border-neutral-300 text-neutral-600 mb-4"
       >
         + Add another item
