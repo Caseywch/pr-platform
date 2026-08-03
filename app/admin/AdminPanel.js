@@ -3,13 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import Logo from "../Logo";
+import UsersTab from "./UsersTab";
 
 const TABS = [
   { id: "users", label: "Users" },
   { id: "projects", label: "Projects & Roles" },
   { id: "suppliers", label: "Suppliers" },
   { id: "uoms", label: "UOMs" },
-  { id: "sla", label: "SLA" },
+  { id: "sla", label: "Turnaround Times" },
 ];
 
 const btn = "text-sm px-3 py-1.5 rounded-md";
@@ -44,8 +46,13 @@ export default function AdminPanel({
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between border-b border-neutral-200 pb-4 mb-6">
           <div>
-            <div className="text-xs uppercase tracking-widest text-neutral-600">Purchase Requisition Platform</div>
-            <h1 className="text-2xl font-bold mt-1">Admin Setup</h1>
+            <div className="flex items-center gap-3">
+              <Logo height={36} />
+              <div>
+                <div className="text-xs uppercase tracking-widest text-neutral-600">Purchase Requisition Platform</div>
+                <h1 className="text-2xl font-bold mt-0.5">Admin Setup</h1>
+              </div>
+            </div>
           </div>
           <a href="/" className="text-xs underline text-neutral-600">Back to app</a>
         </div>
@@ -92,47 +99,6 @@ export default function AdminPanel({
           <ListTab supabase={supabase} table="uoms" items={uoms} setItems={setUoms} label="Unit" fail={fail} />
         )}
         {tab === "sla" && <SlaTab supabase={supabase} sla={sla} setSla={setSla} fail={fail} />}
-      </div>
-    </div>
-  );
-}
-
-function UsersTab({ supabase, profiles, setProfiles, fail }) {
-  const toggle = async (id, field, value) => {
-    const { error } = await supabase.from("profiles").update({ [field]: value }).eq("id", id);
-    if (error) return fail(error);
-    setProfiles(profiles.map((p) => (p.id === id ? { ...p, [field]: value } : p)));
-  };
-
-  return (
-    <div className={card}>
-      <div className="text-xs text-neutral-600 mb-4">
-        People show up here once they've signed up on the platform. Toggle their access below.
-      </div>
-      <div className="flex flex-col gap-2">
-        {profiles.map((p) => (
-          <div key={p.id} className="flex items-center justify-between border border-neutral-200 rounded-md px-3 py-2">
-            <div>
-              <div className="text-sm font-medium">{p.name}</div>
-              <div className="text-xs text-neutral-600">{p.email}</div>
-            </div>
-            <div className="flex gap-4 text-xs">
-              <label className="flex items-center gap-1.5">
-                <input type="checkbox" checked={!!p.is_admin} onChange={(e) => toggle(p.id, "is_admin", e.target.checked)} />
-                Admin
-              </label>
-              <label className="flex items-center gap-1.5">
-                <input
-                  type="checkbox"
-                  checked={!!p.is_purchasing}
-                  onChange={(e) => toggle(p.id, "is_purchasing", e.target.checked)}
-                />
-                Purchasing
-              </label>
-            </div>
-          </div>
-        ))}
-        {profiles.length === 0 && <div className="text-sm text-neutral-600">No one has signed up yet.</div>}
       </div>
     </div>
   );
@@ -216,7 +182,7 @@ function ProjectsTab({ supabase, projects, setProjects, profiles, projectRoles, 
             {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
 
-          {["requester", "verifier", "approver"].map((role) => (
+          {["verifier", "approver"].map((role) => (
             <div key={role} className="mb-4">
               <div className="text-xs uppercase tracking-wide text-neutral-600 mb-1.5">{role}s</div>
               <div className="flex flex-wrap gap-1.5 mb-1.5">
@@ -313,7 +279,7 @@ function SlaTab({ supabase, sla, setSla, fail }) {
 
   return (
     <div className={card}>
-      <div className="text-sm font-bold mb-3">SLA — Working Days</div>
+      <div className="text-sm font-bold mb-3">Turnaround Times — Working Days</div>
       <div className="grid grid-cols-3 gap-3 mb-4">
         <div>
           <label className="text-xs text-neutral-600">To Verify</label>
