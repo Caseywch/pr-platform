@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Logo from "../Logo";
 import UsersTab from "./UsersTab";
+import PendingTab from "./PendingTab";
 
 const TABS = [
   { id: "users", label: "Users" },
@@ -12,6 +13,7 @@ const TABS = [
   { id: "suppliers", label: "Suppliers" },
   { id: "uoms", label: "UOMs" },
   { id: "sla", label: "Turnaround Times" },
+  { id: "pending", label: "Pending Approvals" },
 ];
 
 const btn = "text-sm px-3 py-1.5 rounded-md";
@@ -41,6 +43,8 @@ export default function AdminPanel({
 
   const fail = (err) => setError(err?.message || "Something went wrong.");
 
+  const pendingCount = suppliers.filter((s) => s.status === "pending").length;
+
   return (
     <div className="min-h-screen bg-neutral-50 px-6 py-10">
       <div className="max-w-3xl mx-auto">
@@ -67,6 +71,14 @@ export default function AdminPanel({
               className={`${btn} ${tab === t.id ? "bg-neutral-900 text-white" : "border border-neutral-300"}`}
             >
               {t.label}
+              {t.id === "pending" && pendingCount > 0 && (
+                <span
+                  className="ml-1.5 text-xs px-1.5 py-0.5 rounded-full"
+                  style={{ background: "#B23A2E", color: "white" }}
+                >
+                  {pendingCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -89,7 +101,7 @@ export default function AdminPanel({
           <ListTab
             supabase={supabase}
             table="suppliers"
-            items={suppliers}
+            items={suppliers.filter((s) => s.status !== "pending")}
             setItems={setSuppliers}
             label="Supplier"
             fail={fail}
@@ -97,6 +109,9 @@ export default function AdminPanel({
         )}
         {tab === "uoms" && (
           <ListTab supabase={supabase} table="uoms" items={uoms} setItems={setUoms} label="Unit" fail={fail} />
+        )}
+        {tab === "pending" && (
+          <PendingTab supabase={supabase} suppliers={suppliers} setSuppliers={setSuppliers} fail={fail} />
         )}
         {tab === "sla" && <SlaTab supabase={supabase} sla={sla} setSla={setSla} fail={fail} />}
       </div>
