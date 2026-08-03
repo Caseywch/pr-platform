@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Logo from "../Logo";
 import { AttachmentPicker, uploadAttachments, AttachmentsDisplay } from "./Attachments";
 import {
   MAX_ITEMS, STATUS_META, btn, input, card, today, blankItem,
@@ -255,9 +256,12 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
     <div className="min-h-screen bg-neutral-50 px-6 py-10">
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between border-b border-neutral-200 pb-4 mb-6">
-          <div>
-            <div className="text-xs uppercase tracking-widest text-neutral-600">Purchase Requisition Platform</div>
-            <h1 className="text-2xl font-bold mt-1">PR Board</h1>
+          <div className="flex items-center gap-3">
+            <Logo height={40} />
+            <div>
+              <div className="text-xs uppercase tracking-widest text-neutral-600">Purchase Requisition Platform</div>
+              <h1 className="text-2xl font-bold mt-0.5">PR Board</h1>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             {profile?.is_admin && (
