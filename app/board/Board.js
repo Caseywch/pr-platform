@@ -264,6 +264,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
               <a href="/admin" className="text-xs px-3 py-1.5 rounded-md bg-neutral-900 text-white">Admin Setup</a>
             )}
             <a href="/dashboard" className="text-xs underline text-neutral-600">Dashboard</a>
+            <a href="/schedule" className="text-xs underline text-neutral-600">Schedule</a>
             <a href="/" className="text-xs underline text-neutral-600">Home</a>
           </div>
         </div>
