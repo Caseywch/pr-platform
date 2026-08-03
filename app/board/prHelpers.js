@@ -19,8 +19,17 @@ export const btn = "text-sm px-3 py-1.5 rounded-md";
 export const input = "border border-neutral-300 rounded-md px-3 py-2 text-sm";
 export const card = "bg-white border border-neutral-200 rounded-lg p-5";
 
+// Formats a Date using its local calendar day. Using toISOString() here would
+// convert to UTC first, which in Malaysia (UTC+8) rolls the date back a day.
+export function localDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function today() {
-  return new Date().toISOString().slice(0, 10);
+  return localDate(new Date());
 }
 
 export function blankItem() {
@@ -50,7 +59,7 @@ export function addWorkingDays(dateStr, days) {
     const day = d.getDay();
     if (day !== 0 && day !== 6) left--;
   }
-  return d.toISOString().slice(0, 10);
+  return localDate(d);
 }
 
 // The date a delivery is judged against. A postponement records slippage but
