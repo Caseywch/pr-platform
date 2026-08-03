@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { AttachmentPicker, uploadAttachments, AttachmentsDisplay } from "./Attachments";
 import {
@@ -31,6 +31,15 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
   const [postponingId, setPostponingId] = useState(null);
   const [adminEditId, setAdminEditId] = useState(null);
   const [eventsByPr, setEventsByPr] = useState({});
+
+  // Arriving from the Dashboard with ?pr=<id> should open that requisition.
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("pr");
+    if (!wanted) return;
+    const match = prs.find((p) => p.id === wanted);
+    if (match) toggleExpand(match);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const projectName = (pr) => pr.projects?.name || "Unknown project";
   const projectCode = (pr) => pr.projects?.code || "";
