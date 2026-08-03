@@ -22,7 +22,7 @@ export default async function AdminPage() {
     supabase.from("profiles").select("id, name, email, is_admin, is_purchasing").order("name"),
     supabase.from("projects").select("id, name, code").order("name"),
     supabase.from("project_roles").select("project_id, user_id, role"),
-    supabase.from("suppliers").select("id, name").order("name"),
+    supabase.from("suppliers").select("id, name, status").order("name"),
     supabase.from("uoms").select("id, name").order("name"),
     supabase.from("sla_settings").select("*").eq("id", 1).single(),
   ]);
