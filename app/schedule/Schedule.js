@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Logo from "../Logo";
-import { scheduleDate, timeliness, STATUS_META } from "../board/prHelpers";
+import { scheduleDate, timeliness, STATUS_META, localDate } from "../board/prHelpers";
 
 const card = "bg-white border border-neutral-200 rounded-lg p-5";
 const DELAY = "#B23A2E";
@@ -18,9 +18,8 @@ function startOfWeek(d) {
   return date;
 }
 
-function iso(d) {
-  return d.toISOString().slice(0, 10);
-}
+// Local calendar day, not UTC — otherwise every column key shifts by a day.
+const iso = localDate;
 
 function addDays(d, n) {
   const c = new Date(d);
