@@ -30,15 +30,15 @@ export default function MyActions({ profile, prs, allProjectRoles, sla }) {
   return (
     <div className="min-h-screen bg-neutral-50 px-6 py-10">
       <div className="max-w-3xl mx-auto">
-        <div className="flex items-center justify-between border-b border-neutral-200 pb-4 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-4 mb-6">
           <div className="flex items-center gap-3">
             <Logo height={40} />
             <div>
-              <div className="text-xs uppercase tracking-widest text-neutral-600">Purchase Requisition Platform</div>
+              <div className="text-xs uppercase tracking-widest text-neutral-600 hidden sm:block">Purchase Requisition Platform</div>
               <h1 className="text-2xl font-bold mt-0.5">My Actions</h1>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             {profile?.is_admin && (
               <a href="/admin" className="text-xs px-3 py-1.5 rounded-md bg-neutral-900 text-white">Admin Setup</a>
             )}
