@@ -48,7 +48,7 @@ export default function AdminPanel({
   return (
     <div className="min-h-screen bg-neutral-50 px-6 py-10">
       <div className="max-w-3xl mx-auto">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-4 mb-6">
+        <div className="flex flex-col gap-3 border-b border-neutral-200 pb-4 mb-6">
           <div>
             <div className="flex items-center gap-3">
               <Logo height={36} />
