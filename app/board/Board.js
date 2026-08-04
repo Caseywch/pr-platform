@@ -19,6 +19,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
   const [itemsByPr, setItemsByPr] = useState({});
   const [deliveriesByPr, setDeliveriesByPr] = useState({});
   const [statusFilter, setStatusFilter] = useState("all");
+  const [delayOnly, setDelayOnly] = useState(false);
   const [error, setError] = useState("");
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -42,15 +43,30 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Keep the overlay in step with browser navigation.
+  useEffect(() => {
+    const onPop = () => {
+      const wanted = new URLSearchParams(window.location.search).get("pr");
+      setExpandedId(wanted || null);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
   const projectName = (pr) => pr.projects?.name || "Unknown project";
   const projectCode = (pr) => pr.projects?.code || "";
   const supplierName = (pr) => pr.suppliers?.name || "Unknown supplier";
 
-  const filtered = statusFilter === "all" ? prs : prs.filter((p) => p.status === statusFilter);
+  let filtered = statusFilter === "all" ? prs : prs.filter((p) => p.status === statusFilter);
+  if (delayOnly) filtered = filtered.filter((p) => timeliness(p, sla) === "delay");
 
   const counts = {};
-  Object.keys(STATUS_META).forEach((k) => (counts[k] = 0));
-  prs.forEach((p) => (counts[p.status] = (counts[p.status] || 0) + 1));
+  const delayCounts = {};
+  Object.keys(STATUS_META).forEach((k) => { counts[k] = 0; delayCounts[k] = 0; });
+  prs.forEach((p) => {
+    counts[p.status] = (counts[p.status] || 0) + 1;
+    if (timeliness(p, sla) === "delay") delayCounts[p.status] = (delayCounts[p.status] || 0) + 1;
+  });
 
   // Every notable change is written to a single history trail so the PR can
   // explain its own past: who changed what, when, and why.
@@ -67,12 +83,18 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
 
   const updatePrLocal = (id, patch) => setPrs(prs.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
+  const closePr = () => {
+    setExpandedId(null);
+    window.history.pushState({}, "", "/board");
+  };
+
   const toggleExpand = async (pr) => {
     if (expandedId === pr.id) {
-      setExpandedId(null);
+      closePr();
       return;
     }
     setExpandedId(pr.id);
+    window.history.pushState({}, "", `/board?pr=${pr.id}`);
     if (!itemsByPr[pr.id]) {
       const { data, error } = await supabase
         .from("pr_items")
@@ -277,10 +299,10 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
 
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-6">
           {Object.entries(STATUS_META).map(([key, meta]) => (
-            <button
+            <div
               key={key}
-              onClick={() => setStatusFilter(statusFilter === key ? "all" : key)}
-              className="text-left px-2.5 py-2 rounded-md"
+              className="text-left px-2.5 py-2 rounded-md cursor-pointer"
+              onClick={() => { setStatusFilter(statusFilter === key ? "all" : key); setDelayOnly(false); }}
               style={{
                 border: `1.5px solid ${meta.color}`,
                 background: statusFilter === key ? `${meta.color}14` : "white",
@@ -288,13 +310,30 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
               }}
             >
               <div className="text-[10px] uppercase tracking-wide leading-tight">{meta.label}</div>
-              <div className="text-lg font-medium">{counts[key] || 0}</div>
-            </button>
+              <div className="text-lg font-medium flex items-baseline gap-1">
+                <span>{counts[key] || 0}</span>
+                {delayCounts[key] > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const same = statusFilter === key && delayOnly;
+                      setStatusFilter(same ? "all" : key);
+                      setDelayOnly(!same);
+                    }}
+                    className="text-xs underline"
+                    style={{ color: "#B23A2E" }}
+                    title={`${delayCounts[key]} delayed \u2014 click to show only these`}
+                  >
+                    ({delayCounts[key]})
+                  </button>
+                )}
+              </div>
+            </div>
           ))}
         </div>
 
         <div className="flex items-center justify-between mb-3">
-          <button onClick={() => setStatusFilter("all")} className="text-xs uppercase tracking-wide text-neutral-600">
+          <button onClick={() => { setStatusFilter("all"); setDelayOnly(false); }} className="text-xs uppercase tracking-wide text-neutral-600">
             Show all ({prs.length})
           </button>
           <button onClick={() => setShowForm(!showForm)} className={`${btn} bg-neutral-900 text-white`}>
@@ -355,7 +394,59 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                   </span>
                 </button>
 
-                {isOpen && (
+              </div>
+            );
+          })}
+          {filtered.length === 0 && <div className="text-sm text-neutral-600 text-center py-10">No requisitions here yet.</div>}
+        </div>
+
+        {/* PR detail opens as an overlay so the board stays in place behind it */}
+        {(() => {
+          const pr = prs.find((p) => p.id === expandedId);
+          if (!pr) return null;
+          const meta = STATUS_META[pr.status] || { label: pr.status, color: "#666" };
+          const items = itemsByPr[pr.id];
+          const deliveries = deliveriesByPr[pr.id];
+          const canVerify = canActAs(allProjectRoles, pr.project_id, "verifier", profile.id, profile.is_admin);
+          const canApprove = canActAs(allProjectRoles, pr.project_id, "approver", profile.id, profile.is_admin);
+          const draft = deliveryDraft[pr.id] || { doNumber: "", deliveryDate: today(), type: "complete" };
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto"
+              style={{ background: "rgba(0,0,0,0.45)" }}
+            >
+              <div className="bg-white rounded-lg w-full max-w-2xl my-8 shadow-xl" id="pr-print-area">
+                <div className="flex items-start justify-between px-4 py-3 border-b border-neutral-200 sticky top-0 bg-white rounded-t-lg">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">
+                      {pr.pr_number} <span className="text-neutral-600">· {projectName(pr)} ({projectCode(pr)})</span>
+                    </div>
+                    <div className="text-xs text-neutral-600 mt-0.5">{supplierName(pr)}</div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-3">
+                    {timelinessMeta(timeliness(pr, sla)) && (
+                      <span
+                        className="text-xs px-2 py-1 rounded-full"
+                        style={{
+                          background: `${timelinessMeta(timeliness(pr, sla)).color}14`,
+                          color: timelinessMeta(timeliness(pr, sla)).color,
+                        }}
+                      >
+                        {timelinessMeta(timeliness(pr, sla)).label}
+                      </span>
+                    )}
+                    <span className="text-xs px-2 py-1 rounded-full" style={{ background: `${meta.color}14`, color: meta.color }}>
+                      {meta.label}
+                    </span>
+                    <button onClick={() => window.print()} className="text-xs underline text-neutral-600 no-print" title="Save as PDF">
+                      PDF
+                    </button>
+                    <button onClick={closePr} className="text-lg leading-none px-1 text-neutral-600 no-print" aria-label="Close">
+                      ×
+                    </button>
+                  </div>
+                </div>
+                <div className="px-4 pb-4 pt-3">
                   <div className="px-4 pb-4 pt-1 border-t border-neutral-100">
                     <div className="text-xs text-neutral-600 mb-2">
                       Requested {pr.request_date} · Required {pr.required_date}
@@ -392,6 +483,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                     {isOpen && <AttachmentsDisplay supabase={supabase} prId={pr.id} />}
 
                     <div className="text-xs text-neutral-600 mb-3 flex flex-col gap-0.5">
+                      <div>Requested by {pr.requester?.name || "—"} on {pr.request_date}</div>
                       {pr.verified_by && <div>Verified by {pr.verifier?.name || "—"} on {pr.verified_date}</div>}
                       {pr.approved_by && <div>Approved by {pr.approver?.name || "—"} on {pr.approved_date}</div>}
                       {pr.po_number && <div>PO {pr.po_number} issued {pr.po_date}</div>}
@@ -630,12 +722,12 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                       )
                     )}
                   </div>
-                )}
+                </div>
               </div>
-            );
-          })}
-          {filtered.length === 0 && <div className="text-sm text-neutral-600 text-center py-10">No requisitions here yet.</div>}
-        </div>
+            </div>
+          );
+        })()}
+
       </div>
     </div>
   );
