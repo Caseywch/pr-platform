@@ -172,7 +172,7 @@ export function AttachmentsDisplay({ supabase, prId }) {
       {quotations.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-1.5">
           {quotations.map((f) => (
-            <button key={f.id} onClick={() => openStoredFile(supabase, f.storage_path)} className="text-xs px-2 py-1 rounded-md border border-neutral-300">
+            <button key={f.id} onClick={() => openStoredFile(supabase, f.storage_path)} className="text-xs px-2 py-1 rounded-md border border-neutral-300 print-keep">
               {f.filename}
             </button>
           ))}
@@ -181,7 +181,7 @@ export function AttachmentsDisplay({ supabase, prId }) {
       {drawings.length > 0 && (
         <div className="flex flex-col gap-1.5 mb-1.5">
           {drawings.map((d) => (
-            <button key={d.id} onClick={() => openStoredFile(supabase, d.storage_path)} className="text-xs px-2 py-1 rounded-md border border-neutral-300 w-fit">
+            <button key={d.id} onClick={() => openStoredFile(supabase, d.storage_path)} className="text-xs px-2 py-1 rounded-md border border-neutral-300 w-fit print-keep">
               {d.filename} <span className="text-neutral-600">· Dwg {d.drawing_number} · Rev {d.revision_no}</span>
             </button>
           ))}
