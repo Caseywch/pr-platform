@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Logo from "../Logo";
 import { AttachmentPicker, uploadAttachments, AttachmentsDisplay } from "./Attachments";
+import PrPrintForm from "./PrPrintForm";
 import {
   MAX_ITEMS, STATUS_META, btn, input, card, today, blankItem,
   canActAs, projectHasRole, benchmarkDate, timeliness, timelinessMeta,
@@ -26,6 +27,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
   const [editingId, setEditingId] = useState(null);
   const [poDraft, setPoDraft] = useState({});
   const [poDateDraft, setPoDateDraft] = useState({});
+  const [poDeliverDraft, setPoDeliverDraft] = useState({});
   const [deliveryDraft, setDeliveryDraft] = useState({});
   const [postponeDraft, setPostponeDraft] = useState({});
   const [cancelDraft, setCancelDraft] = useState({});
@@ -33,6 +35,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
   const [postponingId, setPostponingId] = useState(null);
   const [adminEditId, setAdminEditId] = useState(null);
   const [eventsByPr, setEventsByPr] = useState({});
+  const [attachmentsByPr, setAttachmentsByPr] = useState({});
 
   // Arriving from the Dashboard with ?pr=<id> should open that requisition.
   useEffect(() => {
@@ -104,6 +107,14 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
       if (error) { setError(error.message); return; }
       setItemsByPr((prev) => ({ ...prev, [pr.id]: data || [] }));
     }
+    if (!attachmentsByPr[pr.id]) {
+      const { data } = await supabase
+        .from("pr_attachments")
+        .select("*")
+        .eq("pr_id", pr.id)
+        .order("uploaded_at");
+      setAttachmentsByPr((prev) => ({ ...prev, [pr.id]: data || [] }));
+    }
     if (!eventsByPr[pr.id]) {
       const { data } = await supabase
         .from("pr_events")
@@ -172,6 +183,13 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
     const confirmedDate = poDateDraft[pr.id] || null;
     const patch = { status: "po_issued", po_number: poNumber.trim(), po_date: today() };
     if (confirmedDate) patch.new_delivery_date = confirmedDate;
+    const del = poDeliverDraft[pr.id];
+    if (del?.to && del.to !== pr.deliver_to) {
+      patch.deliver_to = del.to;
+      patch.deliver_to_address = del.to === "Other Location" ? (del.addr || "").trim() : null;
+    } else if (del?.to === "Other Location" && (del.addr || "").trim() !== (pr.deliver_to_address || "")) {
+      patch.deliver_to_address = (del.addr || "").trim();
+    }
     const { data, error } = await supabase
       .from("purchase_requisitions")
       .update(patch)
@@ -450,6 +468,10 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                     <div className="text-xs text-neutral-600 mb-2">
                       Requested {pr.request_date} · Required {pr.required_date}
                     </div>
+                    <div className="text-xs text-neutral-600 mb-2">
+                      Deliver to: {pr.deliver_to || "\u2014"}
+                      {pr.deliver_to === "Other Location" && pr.deliver_to_address ? ` \u2014 ${pr.deliver_to_address}` : ""}
+                    </div>
 
                     {!items && <div className="text-xs text-neutral-600">Loading items…</div>}
                     {items && (
@@ -548,6 +570,27 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                               New delivery date (optional) — leave blank to keep {pr.required_date}
                             </div>
                           </div>
+                        </div>
+                        <div className="mb-2">
+                          <select
+                            className={input + " text-xs w-full"}
+                            value={poDeliverDraft[pr.id]?.to ?? (pr.deliver_to || "")}
+                            onChange={(e) => setPoDeliverDraft({ ...poDeliverDraft, [pr.id]: { to: e.target.value, addr: e.target.value === "Other Location" ? (poDeliverDraft[pr.id]?.addr ?? pr.deliver_to_address ?? "") : "" } })}
+                          >
+                            <option value="">Deliver to…</option>
+                            <option value="TMS Factory">TMS Factory</option>
+                            <option value="Other Location">Other Location</option>
+                          </select>
+                          {(poDeliverDraft[pr.id]?.to ?? pr.deliver_to) === "Other Location" && (
+                            <textarea
+                              className={input + " text-xs w-full mt-1"}
+                              rows={2}
+                              placeholder="Delivery address"
+                              value={poDeliverDraft[pr.id]?.addr ?? pr.deliver_to_address ?? ""}
+                              onChange={(e) => setPoDeliverDraft({ ...poDeliverDraft, [pr.id]: { to: poDeliverDraft[pr.id]?.to ?? pr.deliver_to, addr: e.target.value } })}
+                            />
+                          )}
+                          <div className="text-xs text-neutral-600 mt-1">Amend the delivery destination if it has changed.</div>
                         </div>
                         <button onClick={() => issuePo(pr)} className={`${btn} text-white`} style={{ background: "#1F6B63" }}>Issue PO</button>
                       </div>
@@ -723,6 +766,16 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                   </div>
                 </div>
               </div>
+
+              {/* Hidden on screen; this is what actually prints. */}
+              <div className="print-only">
+                <PrPrintForm
+                  pr={pr}
+                  items={items || []}
+                  attachments={attachmentsByPr[pr.id] || []}
+                  deliveries={deliveries || []}
+                />
+              </div>
             </div>
           );
         })()}
@@ -753,6 +806,8 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, setSuppliers, uoms, 
   const [projectId, setProjectId] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [newSupplierName, setNewSupplierName] = useState("");
+  const [deliverTo, setDeliverTo] = useState("");
+  const [deliverAddress, setDeliverAddress] = useState("");
   const [dupeWarning, setDupeWarning] = useState(null);
   const [itemLimitNotice, setItemLimitNotice] = useState("");
   const [requestDate, setRequestDate] = useState(today());
@@ -785,7 +840,8 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, setSuppliers, uoms, 
   const rolesReady = projectId && missingRoles.length === 0;
 
   const supplierChosen = supplierId === "__new__" ? newSupplierName.trim().length > 0 : !!supplierId;
-  const canSubmit = projectId && supplierChosen && rolesReady && requestDate && requiredDate && requiredDateValid && itemsValid && drawingsValid && !submitting;
+  const deliverToOk = deliverTo === "TMS Factory" || (deliverTo === "Other Location" && deliverAddress.trim().length > 0);
+  const canSubmit = projectId && supplierChosen && deliverToOk && rolesReady && requestDate && requiredDate && requiredDateValid && itemsValid && drawingsValid && !submitting;
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -823,6 +879,8 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, setSuppliers, uoms, 
         requester_id: userData.user.id,
         request_date: requestDate,
         required_date: requiredDate,
+        deliver_to: deliverTo,
+        deliver_to_address: deliverTo === "Other Location" ? deliverAddress.trim() : null,
       })
       .select("*, projects(name, code), suppliers(name)")
       .single();
@@ -944,6 +1002,28 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, setSuppliers, uoms, 
           />
           {requiredDate && !requiredDateValid && <div className="text-xs text-red-600 mt-1">Cannot be a past date.</div>}
         </div>
+      </div>
+
+      <div className="mb-4">
+        <label className="text-xs text-neutral-600">Deliver to *</label>
+        <select
+          className={input + " w-full"}
+          value={deliverTo}
+          onChange={(e) => { setDeliverTo(e.target.value); if (e.target.value !== "Other Location") setDeliverAddress(""); }}
+        >
+          <option value="">Please select</option>
+          <option value="TMS Factory">TMS Factory</option>
+          <option value="Other Location">Other Location</option>
+        </select>
+        {deliverTo === "Other Location" && (
+          <textarea
+            className={input + " w-full mt-2"}
+            rows={2}
+            placeholder="Delivery address *"
+            value={deliverAddress}
+            onChange={(e) => setDeliverAddress(e.target.value)}
+          />
+        )}
       </div>
 
       <div className="text-xs uppercase tracking-wide text-neutral-600 mb-2">Items</div>
