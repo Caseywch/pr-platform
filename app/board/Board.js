@@ -299,7 +299,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
     <>
     <div className="min-h-screen bg-neutral-50 px-6 py-10 screen-root">
       <div className="max-w-3xl mx-auto">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-4 mb-6">
+        <div className="flex flex-col gap-3 border-b border-neutral-200 pb-4 mb-6">
           <div className="flex items-center gap-3">
             <Logo height={40} />
             <div>
@@ -307,7 +307,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
               <h1 className="text-2xl font-bold mt-0.5">PR Board</h1>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:ml-[52px]">
             {profile?.is_admin && (
               <a href="/admin" className="text-xs px-3 py-1.5 rounded-md bg-neutral-900 text-white">Admin Setup</a>
             )}
@@ -396,16 +396,16 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
 
             return (
               <div key={pr.id} className={card + " p-0"} style={expandedId === pr.id ? { borderColor: "#171717" } : undefined}>
-                <button onClick={() => toggleExpand(pr)} className="w-full flex items-center justify-between px-4 py-3 text-left">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium truncate">
+                <button onClick={() => toggleExpand(pr)} className="w-full flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-4 py-3 text-left">
+                  <div className="min-w-[150px] flex-1">
+                    <div className="text-sm font-medium break-words">
                       {pr.pr_number} <span className="text-neutral-600">· {projectName(pr)} ({projectCode(pr)})</span>
                     </div>
                     <div className="text-xs text-neutral-600 mt-0.5">
                       {supplierName(pr)} · required by {pr.required_date}
                     </div>
                   </div>
-                  <span className="flex items-center gap-1.5 shrink-0 ml-3">
+                  <span className="flex items-center gap-1.5 shrink-0">
                     {timelinessMeta(timeliness(pr, sla)) && (
                       <span
                         className="text-xs px-2 py-1 rounded-full"
