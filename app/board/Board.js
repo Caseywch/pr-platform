@@ -8,7 +8,7 @@ import PrPrintForm from "./PrPrintForm";
 import {
   MAX_ITEMS, STATUS_META, btn, input, card, today, blankItem,
   canActAs, projectHasRole, benchmarkDate, timeliness, timelinessMeta,
-  findSimilarSupplier,
+  findSimilarSupplier, pendingActionsFor,
 } from "./prHelpers";
 
 export default function Board({ profile, initialPrs, allProjects, eligibleProjects, suppliers: initialSuppliers, uoms, allProjectRoles, sla }) {
@@ -293,6 +293,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
   };
 
   const printPr = prs.find((p) => p.id === expandedId) || null;
+  const myActionCount = pendingActionsFor(prs, profile, allProjectRoles).length;
 
   return (
     <>
@@ -310,6 +311,14 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
             {profile?.is_admin && (
               <a href="/admin" className="text-xs px-3 py-1.5 rounded-md bg-neutral-900 text-white">Admin Setup</a>
             )}
+            <a href="/my-actions" className="text-xs underline text-neutral-600 flex items-center gap-1">
+              My Actions
+              {myActionCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-xs" style={{ background: "#B23A2E", color: "white" }}>
+                  {myActionCount}
+                </span>
+              )}
+            </a>
             <a href="/dashboard" className="text-xs underline text-neutral-600">Dashboard</a>
             <a href="/schedule" className="text-xs underline text-neutral-600">Schedule</a>
             <a href="/" className="text-xs underline text-neutral-600">Home</a>
