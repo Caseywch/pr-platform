@@ -27,22 +27,24 @@ const TIMELINESS = [
 
 function FilterRow({ label, options, value, onChange }) {
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-xs uppercase tracking-wide text-neutral-600 w-20 shrink-0">{label}</span>
-      {options.map((o) => (
-        <button
-          key={o.id}
-          onClick={() => onChange(o.id)}
-          className="text-sm px-3 py-1.5 rounded-md"
-          style={
-            value === o.id
-              ? { background: "#171717", color: "white" }
-              : { border: "1px solid #d4d4d4", color: "#404040" }
-          }
-        >
-          {o.label}
-        </button>
-      ))}
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+      <span className="text-xs uppercase tracking-wide text-neutral-600 sm:w-20 sm:shrink-0">{label}</span>
+      <div className="flex items-center gap-2 flex-wrap">
+        {options.map((o) => (
+          <button
+            key={o.id}
+            onClick={() => onChange(o.id)}
+            className="text-sm px-3 py-1.5 rounded-md"
+            style={
+              value === o.id
+                ? { background: "#171717", color: "white" }
+                : { border: "1px solid #d4d4d4", color: "#404040" }
+            }
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -102,7 +104,7 @@ export default function Dashboard({ profile, prs, sla }) {
   return (
     <div className="min-h-screen bg-neutral-50 px-6 py-10">
       <div className="max-w-5xl mx-auto">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-4 mb-6">
+        <div className="flex flex-col gap-3 border-b border-neutral-200 pb-4 mb-6">
           <div className="flex items-center gap-3">
             <Logo height={36} />
             <div>
@@ -110,7 +112,7 @@ export default function Dashboard({ profile, prs, sla }) {
               <h1 className="text-2xl font-bold mt-0.5">Dashboard</h1>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:ml-[52px]">
             {profile?.is_admin && (
               <a href="/admin" className="text-xs px-3 py-1.5 rounded-md bg-neutral-900 text-white">Admin Setup</a>
             )}
