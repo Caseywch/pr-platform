@@ -9,8 +9,8 @@ const ROWS = 5; // the template always shows five item lines
 
 const cellStyle = {
   border: "1px solid #000",
-  padding: "4px 6px",
-  fontSize: "11px",
+  padding: "4px 5px",
+  fontSize: "14px",
   verticalAlign: "top",
 };
 const headStyle = { ...cellStyle, fontWeight: "bold", textAlign: "center", background: "#eee" };
@@ -21,13 +21,13 @@ const signatureName = {
   fontFamily: '"Segoe Script", "Brush Script MT", "Lucida Handwriting", cursive',
   fontWeight: "bold",
   fontStyle: "italic",
-  fontSize: "15px",
-  minHeight: "22px",
+  fontSize: "18px",
+  minHeight: "24px",
 };
 
 function SignBlock({ role, name, date }) {
   return (
-    <div style={{ width: "32%", fontSize: "11px" }}>
+    <div style={{ width: "32%", fontSize: "14px" }}>
       <div style={{ marginBottom: "2px" }}>{role}:</div>
       <div style={signatureName}>{name || "\u00a0"}</div>
       <div>…………………………….</div>
@@ -49,14 +49,14 @@ export default function PrPrintForm({ pr, items = [], attachments = [], deliveri
 
   return (
     <div id="pr-print-form" style={{ color: "#000", background: "#fff", padding: "14px" }}>
-      <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "15px" }}>
+      <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "18px" }}>
         FEDERAL FURNITURE (1982) SDN BHD
       </div>
-      <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "13px", margin: "10px 0 14px" }}>
+      <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "20px", margin: "10px 0 14px" }}>
         PURCHASE REQUISITION FORM
       </div>
 
-      <div style={{ fontWeight: "bold", fontSize: "12px", marginBottom: "4px" }}>Basic Information</div>
+      <div style={{ fontWeight: "bold", fontSize: "14px", marginBottom: "4px" }}>Basic Information</div>
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "12px" }}>
         <tbody>
           <tr>
@@ -82,7 +82,7 @@ export default function PrPrintForm({ pr, items = [], attachments = [], deliveri
         </tbody>
       </table>
 
-      <div style={{ fontWeight: "bold", fontSize: "12px", marginBottom: "4px" }}>Item to Purchase</div>
+      <div style={{ fontWeight: "bold", fontSize: "14px", marginBottom: "4px" }}>Item to Purchase</div>
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "12px" }}>
         <thead>
           <tr>
@@ -110,8 +110,8 @@ export default function PrPrintForm({ pr, items = [], attachments = [], deliveri
         </tbody>
       </table>
 
-      <div style={{ fontWeight: "bold", fontSize: "12px", marginBottom: "4px" }}>Attachment</div>
-      <div style={{ fontSize: "11px", border: "1px solid #000", padding: "6px", minHeight: "34px", marginBottom: "16px" }}>
+      <div style={{ fontWeight: "bold", fontSize: "14px", marginBottom: "4px" }}>Attachment</div>
+      <div style={{ fontSize: "14px", border: "1px solid #000", padding: "6px", minHeight: "34px", marginBottom: "16px" }}>
         {attachments.length === 0 && <span>None</span>}
         {attachments.map((a, i) => (
           <div key={a.id || i}>
@@ -131,7 +131,7 @@ export default function PrPrintForm({ pr, items = [], attachments = [], deliveri
 
       {/* Operational detail sits below the form proper, outside the template. */}
       {(pr.po_number || deliveries.length > 0 || pr.postponed_delivery_date) && (
-        <div style={{ borderTop: "1px solid #999", paddingTop: "8px", fontSize: "10px" }}>
+        <div style={{ borderTop: "1px solid #999", paddingTop: "8px", fontSize: "14px" }}>
           <div style={{ fontWeight: "bold", marginBottom: "3px" }}>Purchasing &amp; Delivery Record</div>
           {pr.po_number && <div>PO {pr.po_number} issued {pr.po_date}</div>}
           {pr.new_delivery_date && <div>Confirmed delivery date: {pr.new_delivery_date}</div>}
@@ -144,7 +144,7 @@ export default function PrPrintForm({ pr, items = [], attachments = [], deliveri
         </div>
       )}
 
-      <div style={{ marginTop: "14px", fontSize: "10px" }}>Form: PPD-005</div>
+      <div style={{ marginTop: "14px", fontSize: "11px" }}>Form: PPD-005</div>
     </div>
   );
 }
