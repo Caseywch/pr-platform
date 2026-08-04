@@ -34,7 +34,7 @@ export default function MyActions({ profile, prs, allProjectRoles, sla }) {
           <div className="flex items-center gap-3">
             <Logo height={40} />
             <div>
-              <div className="text-xs uppercase tracking-widest text-neutral-600 hidden sm:block">Purchase Requisition Platform</div>
+              <div className="text-xs uppercase tracking-widest text-neutral-600">Purchase Requisition Platform</div>
               <h1 className="text-2xl font-bold mt-0.5">My Actions</h1>
             </div>
           </div>
