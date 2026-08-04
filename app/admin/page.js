@@ -19,7 +19,7 @@ export default async function AdminPage() {
   if (!profile?.is_admin) redirect("/");
 
   const [profiles, projects, projectRoles, suppliers, uoms, sla] = await Promise.all([
-    supabase.from("profiles").select("id, name, email, is_admin, is_purchasing").order("name"),
+    supabase.from("profiles").select("id, name, email, is_admin, is_purchasing, is_active").order("name"),
     supabase.from("projects").select("id, name, code").order("name"),
     supabase.from("project_roles").select("project_id, user_id, role"),
     supabase.from("suppliers").select("id, name, status").order("name"),
