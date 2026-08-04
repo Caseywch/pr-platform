@@ -428,8 +428,9 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
           const canApprove = canActAs(allProjectRoles, pr.project_id, "approver", profile.id, profile.is_admin);
           const draft = deliveryDraft[pr.id] || { doNumber: "", deliveryDate: today(), type: "complete" };
           return (
+            <>
             <div
-              className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto"
+              className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto no-print"
               style={{ background: "rgba(0,0,0,0.45)" }}
             >
               <div className="bg-white rounded-lg w-full max-w-2xl my-8 shadow-xl" id="pr-print-area">
@@ -766,17 +767,19 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                   </div>
                 </div>
               </div>
-
-              {/* Hidden on screen; this is what actually prints. */}
-              <div className="print-only">
-                <PrPrintForm
-                  pr={pr}
-                  items={items || []}
-                  attachments={attachmentsByPr[pr.id] || []}
-                  deliveries={deliveries || []}
-                />
-              </div>
             </div>
+
+            {/* Outside the overlay on purpose: a fixed-position parent would
+                make the browser repeat this on every printed page. */}
+            <div className="print-only">
+              <PrPrintForm
+                pr={pr}
+                items={items || []}
+                attachments={attachmentsByPr[pr.id] || []}
+                deliveries={deliveries || []}
+              />
+            </div>
+            </>
           );
         })()}
 
