@@ -28,15 +28,18 @@ body {
   body * {
     visibility: hidden;
   }
+  /* Remove the on-screen overlay from the printed page entirely. Leaving it
+     merely invisible still lets a fixed-position box repeat per page. */
+  .no-print {
+    display: none !important;
+  }
   .print-only,
   .print-only * {
     visibility: visible;
   }
   .print-only {
     display: block;
-    position: absolute;
-    left: 0;
-    top: 0;
+    position: static;
     width: 100%;
   }
   @page {
