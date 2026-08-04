@@ -216,7 +216,7 @@ function ProjectsTab({ supabase, projects, setProjects, profiles, projectRoles, 
                   onChange={(e) => setAddUserId({ ...addUserId, [role]: e.target.value })}
                 >
                   <option value="">Select user…</option>
-                  {profiles.filter((p) => !rolesFor(role).some((r) => r.user_id === p.id)).map((p) => (
+                  {profiles.filter((p) => p.is_active !== false && !rolesFor(role).some((r) => r.user_id === p.id)).map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
