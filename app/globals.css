@@ -18,29 +18,27 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Printing a PR prints the PPD-005 form, not the screen. The form is hidden
-   on screen and revealed only to the printer. */
+/* Printing a PR prints the PPD-005 form and nothing else. The form is hidden
+   on screen; when printing, the entire on-screen app is removed from the
+   layout (display:none, not just hidden) so no empty trailing page is left. */
 .print-only {
   display: none;
 }
 
 @media print {
-  body * {
-    visibility: hidden;
-  }
-  /* Remove the on-screen overlay from the printed page entirely. Leaving it
-     merely invisible still lets a fixed-position box repeat per page. */
+  .screen-root,
   .no-print {
     display: none !important;
   }
-  .print-only,
-  .print-only * {
-    visibility: visible;
-  }
   .print-only {
-    display: block;
-    position: static;
-    width: 100%;
+    display: block !important;
+  }
+  html,
+  body {
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
   }
   @page {
     size: A4;
