@@ -303,7 +303,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
           <div className="flex items-center gap-3">
             <Logo height={40} />
             <div>
-              <div className="text-xs uppercase tracking-widest text-neutral-600 hidden sm:block">Purchase Requisition Platform</div>
+              <div className="text-xs uppercase tracking-widest text-neutral-600">Purchase Requisition Platform</div>
               <h1 className="text-2xl font-bold mt-0.5">PR Board</h1>
             </div>
           </div>
@@ -446,14 +446,22 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
               style={{ background: "rgba(0,0,0,0.45)" }}
             >
               <div className="bg-white rounded-lg w-full max-w-2xl my-8 shadow-xl" id="pr-print-area">
-                <div className="flex items-start justify-between px-4 py-3 border-b border-neutral-200 sticky top-0 bg-white rounded-t-lg">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium">
+                <div className="flex flex-wrap items-start justify-between gap-2 px-4 py-3 border-b border-neutral-200 sticky top-0 bg-white rounded-t-lg z-10">
+                  <div className="min-w-0 pr-2">
+                    <div className="text-sm font-medium break-words">
                       {pr.pr_number} <span className="text-neutral-600">· {projectName(pr)} ({projectCode(pr)})</span>
                     </div>
                     <div className="text-xs text-neutral-600 mt-0.5">{supplierName(pr)}</div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-3">
+                  <div className="flex items-center gap-2 shrink-0 ml-auto">
+                    <button onClick={() => window.print()} className="text-xs underline text-neutral-600 no-print" title="Save as PDF">
+                      PDF
+                    </button>
+                    <button onClick={closePr} className="text-lg leading-none px-1 text-neutral-600 no-print" aria-label="Close">
+                      ×
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2 w-full">
                     {timelinessMeta(timeliness(pr, sla)) && (
                       <span
                         className="text-xs px-2 py-1 rounded-full"
@@ -468,16 +476,10 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                     <span className="text-xs px-2 py-1 rounded-full" style={{ background: `${meta.color}14`, color: meta.color }}>
                       {meta.label}
                     </span>
-                    <button onClick={() => window.print()} className="text-xs underline text-neutral-600 no-print" title="Save as PDF">
-                      PDF
-                    </button>
-                    <button onClick={closePr} className="text-lg leading-none px-1 text-neutral-600 no-print" aria-label="Close">
-                      ×
-                    </button>
                   </div>
                 </div>
                 <div className="px-4 pb-4 pt-3">
-                  <div className="px-4 pb-4 pt-1 border-t border-neutral-100">
+                  <div className="pb-4 pt-1">
                     <div className="text-xs text-neutral-600 mb-2">
                       Requested {pr.request_date} · Required {pr.required_date}
                     </div>
