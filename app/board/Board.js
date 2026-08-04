@@ -292,8 +292,11 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
     setDeliveryDraft((prev) => ({ ...prev, [pr.id]: { doNumber: "", deliveryDate: today(), type: "complete" } }));
   };
 
+  const printPr = prs.find((p) => p.id === expandedId) || null;
+
   return (
-    <div className="min-h-screen bg-neutral-50 px-6 py-10">
+    <>
+    <div className="min-h-screen bg-neutral-50 px-6 py-10 screen-root">
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between border-b border-neutral-200 pb-4 mb-6">
           <div className="flex items-center gap-3">
@@ -769,22 +772,24 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
               </div>
             </div>
 
-            {/* Outside the overlay on purpose: a fixed-position parent would
-                make the browser repeat this on every printed page. */}
-            <div className="print-only">
-              <PrPrintForm
-                pr={pr}
-                items={items || []}
-                attachments={attachmentsByPr[pr.id] || []}
-                deliveries={deliveries || []}
-              />
-            </div>
             </>
           );
         })()}
 
       </div>
     </div>
+
+    {printPr && (
+      <div className="print-only">
+        <PrPrintForm
+          pr={printPr}
+          items={itemsByPr[printPr.id] || []}
+          attachments={attachmentsByPr[printPr.id] || []}
+          deliveries={deliveriesByPr[printPr.id] || []}
+        />
+      </div>
+    )}
+    </>
   );
 }
 
