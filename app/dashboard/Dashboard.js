@@ -106,7 +106,7 @@ export default function Dashboard({ profile, prs, sla }) {
           <div className="flex items-center gap-3">
             <Logo height={36} />
             <div>
-              <div className="text-xs uppercase tracking-widest text-neutral-600 hidden sm:block">Purchase Requisition Platform</div>
+              <div className="text-xs uppercase tracking-widest text-neutral-600">Purchase Requisition Platform</div>
               <h1 className="text-2xl font-bold mt-0.5">Dashboard</h1>
             </div>
           </div>
