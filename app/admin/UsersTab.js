@@ -45,6 +45,14 @@ export default function UsersTab({ supabase, profiles, setProfiles, fail, router
     setNewPin("");
   };
 
+  const setActive = async (u, active) => {
+    if (!active && !window.confirm(`Deactivate ${u.name}? They will no longer be able to sign in, and their role assignments will be cleared. Their name stays on every requisition they were part of.`)) return;
+    const { error } = await supabase.rpc("admin_set_user_active", { p_user_id: u.id, p_active: active });
+    if (error) return fail(error);
+    setProfiles(profiles.map((p) => (p.id === u.id ? { ...p, is_active: active } : p)));
+    setNotice(active ? `${u.name} reactivated.` : `${u.name} deactivated. Their history is unchanged.`);
+  };
+
   const resetPinValid = /^[0-9]{6}$/.test(resetPin);
 
   const doResetPin = async (userId, userName) => {
@@ -109,9 +117,14 @@ export default function UsersTab({ supabase, profiles, setProfiles, fail, router
       <div className="flex flex-col gap-2">
         {profiles.map((p) => (
           <div key={p.id}>
-          <div className="flex items-center justify-between border border-neutral-200 rounded-md px-3 py-2">
+          <div className="flex items-center justify-between border border-neutral-200 rounded-md px-3 py-2" style={p.is_active === false ? { opacity: 0.55, background: "#fafafa" } : undefined}>
             <div>
-              <div className="text-sm font-medium">{p.name}</div>
+              <div className="text-sm font-medium">
+                {p.name}
+                {p.is_active === false && (
+                  <span className="ml-2 text-xs px-1.5 py-0.5 rounded" style={{ background: "#e5e5e5", color: "#525252" }}>Inactive</span>
+                )}
+              </div>
               <div className="text-xs text-neutral-600">{p.email}</div>
             </div>
             <div className="flex gap-4 text-xs">
@@ -132,6 +145,13 @@ export default function UsersTab({ supabase, profiles, setProfiles, fail, router
                 className="underline text-neutral-600"
               >
                 Reset PIN
+              </button>
+              <button
+                onClick={() => setActive(p, p.is_active === false)}
+                className="underline"
+                style={{ color: p.is_active === false ? "#1F6B63" : "#B23A2E" }}
+              >
+                {p.is_active === false ? "Reactivate" : "Deactivate"}
               </button>
             </div>
           </div>
