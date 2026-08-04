@@ -358,7 +358,6 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
         <div className="flex flex-col gap-2">
           {filtered.map((pr) => {
             const meta = STATUS_META[pr.status] || { label: pr.status, color: "#666" };
-            const isOpen = expandedId === pr.id;
             const items = itemsByPr[pr.id];
             const deliveries = deliveriesByPr[pr.id];
             const canVerify = canActAs(allProjectRoles, pr.project_id, "verifier", profile.id, profile.is_admin);
@@ -366,7 +365,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
             const draft = deliveryDraft[pr.id] || { doNumber: "", deliveryDate: today(), type: "complete" };
 
             return (
-              <div key={pr.id} className={card + " p-0"}>
+              <div key={pr.id} className={card + " p-0"} style={expandedId === pr.id ? { borderColor: "#171717" } : undefined}>
                 <button onClick={() => toggleExpand(pr)} className="w-full flex items-center justify-between px-4 py-3 text-left">
                   <div className="min-w-0">
                     <div className="text-sm font-medium truncate">
@@ -480,7 +479,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                       </table>
                     )}
 
-                    {isOpen && <AttachmentsDisplay supabase={supabase} prId={pr.id} />}
+                    <AttachmentsDisplay supabase={supabase} prId={pr.id} />
 
                     <div className="text-xs text-neutral-600 mb-3 flex flex-col gap-0.5">
                       <div>Requested by {pr.requester?.name || "—"} on {pr.request_date}</div>
