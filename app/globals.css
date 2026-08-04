@@ -17,3 +17,31 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Printing a PR: hide the app around it and let the overlay flow onto paper.
+   Uses the browser's own "Save as PDF", so no PDF library is needed. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #pr-print-area,
+  #pr-print-area * {
+    visibility: visible;
+  }
+  #pr-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    box-shadow: none;
+  }
+  .no-print {
+    display: none !important;
+  }
+  /* Buttons that only make sense on screen shouldn't print as empty boxes */
+  #pr-print-area button:not(.print-keep) {
+    display: none !important;
+  }
+}
