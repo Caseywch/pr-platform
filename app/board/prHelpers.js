@@ -126,3 +126,50 @@ export function findSimilarSupplier(suppliers, typed) {
     }) || null
   );
 }
+
+// Which requisitions are waiting on a particular person right now.
+// Administrators can technically act on anything, but that would make their
+// list meaningless — so this only counts roles they are actually assigned to.
+export function pendingActionsFor(prs, profile, allProjectRoles) {
+  if (!profile) return [];
+  const hasRole = (projectId, role) =>
+    allProjectRoles.some(
+      (r) => r.project_id === projectId && r.role === role && r.user_id === profile.id
+    );
+
+  return prs.filter((pr) => {
+    switch (pr.status) {
+      case "pending_verification":
+        return hasRole(pr.project_id, "verifier");
+      case "pending_approval":
+        return hasRole(pr.project_id, "approver");
+      case "pending_po":
+      case "po_issued":
+      case "partial_delivery":
+        return !!profile.is_purchasing;
+      case "rejected":
+        return pr.requester_id === profile.id;
+      default:
+        return false;
+    }
+  });
+}
+
+// What the person is actually being asked to do, for display.
+export function actionLabelFor(pr) {
+  switch (pr.status) {
+    case "pending_verification":
+      return "Verify";
+    case "pending_approval":
+      return "Approve";
+    case "pending_po":
+      return "Issue PO";
+    case "po_issued":
+    case "partial_delivery":
+      return "Log delivery";
+    case "rejected":
+      return "Amend and resubmit";
+    default:
+      return "";
+  }
+}
