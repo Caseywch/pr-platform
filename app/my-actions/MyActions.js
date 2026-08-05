@@ -71,9 +71,9 @@ export default function MyActions({ profile, prs, allProjectRoles, sla }) {
                 onClick={() => open(pr)}
                 className={card + " p-0 text-left w-full"}
               >
-                <div className="flex items-center justify-between px-4 py-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium truncate">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-4 py-3">
+                  <div className="min-w-[150px] flex-1">
+                    <div className="text-sm font-medium break-words">
                       {pr.pr_number}{" "}
                       <span className="text-neutral-600">
                         · {pr.projects?.name || "Unknown project"} ({pr.projects?.code || ""})
@@ -86,7 +86,7 @@ export default function MyActions({ profile, prs, allProjectRoles, sla }) {
                       {actionLabelFor(pr)}
                     </div>
                   </div>
-                  <span className="flex items-center gap-1.5 shrink-0 ml-3">
+                  <span className="flex items-center gap-1.5 shrink-0">
                     {t && (
                       <span
                         className="text-xs px-2 py-1 rounded-full"
