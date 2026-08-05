@@ -197,7 +197,7 @@ function ProjectsTab({ supabase, projects, setProjects, profiles, projectRoles, 
             {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
 
-          {["verifier", "approver"].map((role) => (
+          {["verifier", "approver", "purchaser"].map((role) => (
             <div key={role} className="mb-4">
               <div className="text-xs uppercase tracking-wide text-neutral-600 mb-1.5">{role}s</div>
               <div className="flex flex-wrap gap-1.5 mb-1.5">
