@@ -86,6 +86,17 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
 
   const updatePrLocal = (id, patch) => setPrs(prs.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
+  // Fire-and-forget: email is a courtesy notification, never a dependency
+  // for the workflow action itself. Silently no-ops until an email
+  // service key is configured.
+  const notify = (payload) => {
+    fetch("/api/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+  };
+
   const closePr = () => {
     setExpandedId(null);
     window.history.pushState({}, "", "/board");
@@ -171,6 +182,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
       .single();
     if (error) return setError(error.message);
     updatePrLocal(pr.id, data);
+    notify({ event: "rejected", prId: pr.id, reason: rejectReason.trim() });
     setRejectingId(null);
     setRejectReason("");
   };
@@ -205,6 +217,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
         ? `PO ${poNumber.trim()} issued; delivery confirmed for ${confirmedDate}`
         : `PO ${poNumber.trim()} issued`
     );
+    notify({ event: "po_issued", prId: pr.id });
     setPoDateDraft((prev) => ({ ...prev, [pr.id]: "" }));
     setPoDraft((prev) => ({ ...prev, [pr.id]: "" }));
   };
@@ -223,6 +236,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
     if (error) return setError(error.message);
     updatePrLocal(pr.id, data);
     await logEvent(pr.id, "postponed", `Delivery postponed to ${d.date} — ${d.reason.trim()}`);
+    notify({ event: "postponed", prId: pr.id, newDate: d.date, reason: d.reason.trim() });
     setPostponeDraft((prev) => ({ ...prev, [pr.id]: { date: "", reason: "" } }));
     setPostponingId(null);
   };
@@ -289,6 +303,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
       .single();
     if (error) return setError(error.message);
     updatePrLocal(pr.id, data);
+    notify({ event: "delivery", prId: pr.id, delivery: deliveryRow });
     setDeliveryDraft((prev) => ({ ...prev, [pr.id]: { doNumber: "", deliveryDate: today(), type: "complete" } }));
   };
 
@@ -392,6 +407,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
             const deliveries = deliveriesByPr[pr.id];
             const canVerify = canActAs(allProjectRoles, pr.project_id, "verifier", profile.id, profile.is_admin);
             const canApprove = canActAs(allProjectRoles, pr.project_id, "approver", profile.id, profile.is_admin);
+            const canPurchase = canActAs(allProjectRoles, pr.project_id, "purchaser", profile.id, profile.is_admin);
             const draft = deliveryDraft[pr.id] || { doNumber: "", deliveryDate: today(), type: "complete" };
 
             return (
@@ -438,6 +454,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
           const deliveries = deliveriesByPr[pr.id];
           const canVerify = canActAs(allProjectRoles, pr.project_id, "verifier", profile.id, profile.is_admin);
           const canApprove = canActAs(allProjectRoles, pr.project_id, "approver", profile.id, profile.is_admin);
+          const canPurchase = canActAs(allProjectRoles, pr.project_id, "purchaser", profile.id, profile.is_admin);
           const draft = deliveryDraft[pr.id] || { doNumber: "", deliveryDate: today(), type: "complete" };
           return (
             <>
@@ -490,26 +507,38 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
 
                     {!items && <div className="text-xs text-neutral-600">Loading items…</div>}
                     {items && (
-                      <table className="w-full text-xs mb-3">
+                      <table className="w-full text-xs mb-3" style={{ tableLayout: "fixed" }}>
+                        <colgroup>
+                          <col style={{ width: "10%" }} />
+                          <col style={{ width: "34%" }} />
+                          <col style={{ width: "10%" }} />
+                          <col style={{ width: "6%" }} />
+                          <col style={{ width: "8%" }} />
+                          <col style={{ width: "32%" }} />
+                        </colgroup>
                         <thead>
                           <tr className="text-left text-neutral-600">
-                            <th className="py-1 pr-3">Item No.</th>
-                            <th className="py-1 pr-3">Description</th>
-                            <th className="py-1 pr-3">SKU</th>
-                            <th className="py-1 pr-3">Qty</th>
-                            <th className="py-1 pr-3">UOM</th>
+                            <th className="py-1 pr-2">Item No.</th>
+                            <th className="py-1 pr-2">Description</th>
+                            <th className="py-1 pr-2">SKU</th>
+                            <th className="py-1 pr-2">Qty</th>
+                            <th className="py-1 pr-2">UOM</th>
                             <th className="py-1">Remark</th>
                           </tr>
                         </thead>
                         <tbody>
                           {items.map((it) => (
                             <tr key={it.id} className="border-t border-neutral-100">
-                              <td className="py-1.5 pr-3">{it.item_number}</td>
-                              <td className="py-1.5 pr-3">{it.description}</td>
-                              <td className="py-1.5 pr-3">{it.sku}</td>
-                              <td className="py-1.5 pr-3">{it.qty}</td>
-                              <td className="py-1.5 pr-3">{it.uoms?.name || "—"}</td>
-                              <td className="py-1.5">{it.remark || "—"}</td>
+                              <td className="py-1.5 pr-2 break-words align-top">{it.item_number}</td>
+                              <td className="py-1.5 pr-2 align-top">
+                                <div className="break-words" style={{ maxHeight: 72, overflowY: "auto" }}>{it.description}</div>
+                              </td>
+                              <td className="py-1.5 pr-2 break-words align-top">{it.sku}</td>
+                              <td className="py-1.5 pr-2 break-words align-top">{it.qty}</td>
+                              <td className="py-1.5 pr-2 break-words align-top">{it.uoms?.name || "—"}</td>
+                              <td className="py-1.5 align-top">
+                                <div className="break-words" style={{ maxHeight: 72, overflowY: "auto" }}>{it.remark || "—"}</div>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -564,7 +593,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                     )}
 
                     {/* Purchasing: issue PO */}
-                    {pr.status === "pending_po" && profile.is_purchasing && (
+                    {pr.status === "pending_po" && canPurchase && (
                       <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3">
                         <div className="text-xs uppercase tracking-wide text-neutral-600 mb-2">Issue purchase order</div>
                         <div className="grid grid-cols-2 gap-2 mb-2">
@@ -612,7 +641,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                     )}
 
                     {/* Purchasing: log delivery */}
-                    {(pr.status === "po_issued" || pr.status === "partial_delivery") && profile.is_purchasing && (
+                    {(pr.status === "po_issued" || pr.status === "partial_delivery") && canPurchase && (
                       <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3">
                         <div className="text-xs uppercase tracking-wide text-neutral-600 mb-2">Log delivery</div>
                         <div className="grid grid-cols-2 gap-2 mb-2">
@@ -671,7 +700,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                     )}
 
                     {/* Purchasing: postpone an agreed delivery */}
-                    {(pr.status === "po_issued" || pr.status === "partial_delivery") && profile.is_purchasing && (
+                    {(pr.status === "po_issued" || pr.status === "partial_delivery") && canPurchase && (
                       postponingId === pr.id ? (
                         <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3 mt-2">
                           <div className="text-xs uppercase tracking-wide text-neutral-600 mb-2">Postpone delivery</div>
