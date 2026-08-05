@@ -86,11 +86,13 @@ export default function Schedule({ profile, prs, sla }) {
         </div>
 
         <div className={card + " mb-5"}>
-          <div className="flex items-center gap-2 flex-wrap mb-3">
-            <button onClick={() => setWeekStart(addDays(weekStart, -7))} className={btn}>← Previous</button>
-            <button onClick={() => setWeekStart(startOfWeek(new Date()))} className={btn}>This week</button>
-            <button onClick={() => setWeekStart(addDays(weekStart, 7))} className={btn}>Next →</button>
-            <span className="text-sm font-medium ml-2">{weekLabel}</span>
+          <div className="mb-3">
+            <div className="flex items-center gap-2">
+              <button onClick={() => setWeekStart(addDays(weekStart, -7))} className={btn}>← Previous</button>
+              <button onClick={() => setWeekStart(startOfWeek(new Date()))} className={btn}>This week</button>
+              <button onClick={() => setWeekStart(addDays(weekStart, 7))} className={btn}>Next →</button>
+            </div>
+            <div className="text-sm font-medium mt-2">{weekLabel}</div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -113,7 +115,7 @@ export default function Schedule({ profile, prs, sla }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-7 gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-2">
           {days.map((d, i) => {
             const key = dayKeys[i];
             const items = byDay[key] || [];
@@ -121,8 +123,8 @@ export default function Schedule({ profile, prs, sla }) {
             return (
               <div
                 key={key}
-                className="bg-white border rounded-lg p-2 flex flex-col"
-                style={{ minHeight: 180, borderColor: isToday ? "#171717" : "#e5e5e5" }}
+                className="bg-white border rounded-lg p-2 flex flex-col shrink-0"
+                style={{ minHeight: 180, width: 140, borderColor: isToday ? "#171717" : "#e5e5e5" }}
               >
                 <div className="text-center mb-2 pb-2 border-b border-neutral-100">
                   <div className="text-xs uppercase tracking-wide text-neutral-600">{DAY_NAMES[i]}</div>
