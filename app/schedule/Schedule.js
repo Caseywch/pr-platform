@@ -87,12 +87,35 @@ export default function Schedule({ profile, prs, sla }) {
 
         <div className={card + " mb-5"}>
           <div className="mb-3">
-            <div className="flex items-center gap-2">
-              <button onClick={() => setWeekStart(addDays(weekStart, -7))} className={btn}>← Previous</button>
-              <button onClick={() => setWeekStart(startOfWeek(new Date()))} className={btn}>This week</button>
-              <button onClick={() => setWeekStart(addDays(weekStart, 7))} className={btn}>Next →</button>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => setWeekStart(addDays(weekStart, -7))}
+                className={`${btn} flex flex-col items-center justify-center leading-tight py-2`}
+              >
+                <span>←</span>
+                <span>Previous</span>
+              </button>
+              <button
+                onClick={() => setWeekStart(startOfWeek(new Date()))}
+                className={`${btn} flex flex-col items-center justify-center leading-tight py-2`}
+              >
+                <span>&nbsp;</span>
+                <span>This week</span>
+              </button>
+              <button
+                onClick={() => setWeekStart(addDays(weekStart, 7))}
+                className={`${btn} flex flex-col items-center justify-center leading-tight py-2`}
+              >
+                <span>→</span>
+                <span>Next</span>
+              </button>
             </div>
-            <div className="text-sm font-medium mt-2">{weekLabel}</div>
+            <div
+              className="text-sm font-medium text-center rounded-md py-2 mt-2"
+              style={{ background: "#404040", color: "white" }}
+            >
+              {weekLabel}
+            </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
