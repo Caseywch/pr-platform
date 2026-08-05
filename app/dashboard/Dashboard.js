@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Logo from "../Logo";
-import { STATUS_META, benchmarkDate, timeliness } from "../board/prHelpers";
+import { STATUS_META, benchmarkDate, timeliness, pendingActionsFor } from "../board/prHelpers";
 
 const card = "bg-white border border-neutral-200 rounded-lg p-5";
 
@@ -49,7 +49,7 @@ function FilterRow({ label, options, value, onChange }) {
   );
 }
 
-export default function Dashboard({ profile, prs, sla }) {
+export default function Dashboard({ profile, prs, sla, allProfiles = [], allProjectRoles = [] }) {
   const [groupBy, setGroupBy] = useState("project");
   const [statusFilter, setStatusFilter] = useState("open");
   const [timeFilter, setTimeFilter] = useState("all");
@@ -65,16 +65,29 @@ export default function Dashboard({ profile, prs, sla }) {
   const filtered =
     timeFilter === "all" ? withTime : withTime.filter((p) => p._t === timeFilter);
 
-  const keyOf = (pr) => {
-    if (groupBy === "user") return pr.requester?.name || "Unassigned";
-    if (groupBy === "supplier") return pr.suppliers?.name || "No supplier";
-    return pr.projects?.name || "No project";
-  };
-
   const groups = {};
-  for (const pr of filtered) {
-    const k = keyOf(pr);
-    (groups[k] = groups[k] || []).push(pr);
+
+  if (groupBy === "user") {
+    // Not "PRs this person raised" — each box is the PRs currently sitting in
+    // THIS person's queue (as Verifier, Approver, Purchasing, or a rejected
+    // PR of their own to resubmit). Reuses the exact logic behind My Actions,
+    // so the two views can never disagree about what's pending on whom.
+    // Status is meaningless here (a pending action is inherently "open"), but
+    // Timeliness still narrows it to just the overdue ones.
+    for (const person of allProfiles) {
+      const mine = pendingActionsFor(prs, person, allProjectRoles)
+        .filter((p) => p.status !== "cancelled")
+        .map((p) => ({ ...p, _t: timeliness(p, sla) }))
+        .filter((p) => timeFilter === "all" || p._t === timeFilter);
+      if (mine.length > 0) groups[person.name] = mine;
+    }
+  } else {
+    const keyOf = (pr) =>
+      groupBy === "supplier" ? pr.suppliers?.name || "No supplier" : pr.projects?.name || "No project";
+    for (const pr of filtered) {
+      const k = keyOf(pr);
+      (groups[k] = groups[k] || []).push(pr);
+    }
   }
 
   // Delayed work sits at the top of each column so the problems are at eye level.
@@ -125,7 +138,9 @@ export default function Dashboard({ profile, prs, sla }) {
         <div className={card + " mb-5"}>
           <div className="flex flex-col gap-2.5">
             <FilterRow label="Group by" options={GROUPINGS} value={groupBy} onChange={setGroupBy} />
-            <FilterRow label="Status" options={STATUSES} value={statusFilter} onChange={setStatusFilter} />
+            {groupBy !== "user" && (
+              <FilterRow label="Status" options={STATUSES} value={statusFilter} onChange={setStatusFilter} />
+            )}
             <FilterRow label="Timeliness" options={TIMELINESS} value={timeFilter} onChange={setTimeFilter} />
           </div>
           <div className="flex items-center gap-4 mt-4 pt-3 border-t border-neutral-100 text-xs text-neutral-600">
@@ -138,7 +153,11 @@ export default function Dashboard({ profile, prs, sla }) {
             <span className="flex items-center gap-1.5">
               <span style={{ width: 12, height: 12, background: ONTIME, opacity: 0.35, borderRadius: 2, display: "inline-block" }} /> Fulfilled
             </span>
-            <span className="ml-auto">Showing {filtered.length} requisition{filtered.length === 1 ? "" : "s"}</span>
+            <span className="ml-auto">
+              {groupBy === "user"
+                ? `Showing ${Object.values(groups).reduce((n, g) => n + g.length, 0)} pending action${Object.values(groups).reduce((n, g) => n + g.length, 0) === 1 ? "" : "s"}`
+                : `Showing ${filtered.length} requisition${filtered.length === 1 ? "" : "s"}`}
+            </span>
           </div>
         </div>
 
