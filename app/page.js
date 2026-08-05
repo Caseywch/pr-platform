@@ -38,30 +38,12 @@ export default async function Home() {
         </div>
 
         <div className="bg-white border border-neutral-200 rounded-lg p-5">
-          <div className="text-sm text-neutral-600 mb-2">
-            You're signed in and connected to the real database. This confirms:
+          <div className="text-sm text-neutral-700">
+            Welcome to the Federal Furniture (1982) Sdn Bhd Purchase Requisition Platform. This platform
+            is proprietary to the company and intended solely for authorised personnel. Access
+            credentials are issued individually and must not be shared. Should you forget your PIN,
+            please contact your Administrator for assistance.
           </div>
-          <ul className="text-sm text-neutral-700 list-disc pl-5 space-y-1">
-            <li>Authentication works (Supabase Auth)</li>
-            <li>Your profile row was created automatically on sign-up</li>
-            <li>The app can read from the real Postgres database</li>
-          </ul>
-          {profile?.is_admin && (
-            <div className="mt-4 text-xs px-3 py-2 rounded-md bg-emerald-50 text-emerald-700">
-              You're marked as Administrator.
-            </div>
-          )}
-          {!profile?.is_admin && (
-            <div className="mt-4 text-xs px-3 py-2 rounded-md bg-amber-50 text-amber-700">
-              You're not an Administrator yet. In Supabase → Table Editor → profiles, set is_admin to true on your row.
-            </div>
-          )}
-        </div>
-
-        <div className="text-xs text-neutral-600 mt-6">
-          {profile?.is_admin
-            ? "Head to Admin Setup above to configure Projects, Suppliers, UOMs, roles, and SLA."
-            : "Next: the Purchase Requisition workflow gets built here."}
         </div>
       </div>
     </div>
