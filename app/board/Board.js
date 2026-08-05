@@ -509,33 +509,33 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                     {items && (
                       <table className="w-full text-xs mb-3" style={{ tableLayout: "fixed" }}>
                         <colgroup>
-                          <col style={{ width: "10%" }} />
-                          <col style={{ width: "34%" }} />
-                          <col style={{ width: "10%" }} />
-                          <col style={{ width: "6%" }} />
+                          <col style={{ width: "9%" }} />
+                          <col style={{ width: "32%" }} />
+                          <col style={{ width: "9%" }} />
                           <col style={{ width: "8%" }} />
+                          <col style={{ width: "10%" }} />
                           <col style={{ width: "32%" }} />
                         </colgroup>
                         <thead>
                           <tr className="text-left text-neutral-600">
-                            <th className="py-1 pr-2">Item No.</th>
-                            <th className="py-1 pr-2">Description</th>
-                            <th className="py-1 pr-2">SKU</th>
-                            <th className="py-1 pr-2">Qty</th>
-                            <th className="py-1 pr-2">UOM</th>
-                            <th className="py-1">Remark</th>
+                            <th className="py-1 pr-3" style={{ whiteSpace: "nowrap" }}>Item No.</th>
+                            <th className="py-1 pr-3" style={{ whiteSpace: "nowrap" }}>Description</th>
+                            <th className="py-1 pr-3" style={{ whiteSpace: "nowrap" }}>SKU</th>
+                            <th className="py-1 pr-3" style={{ whiteSpace: "nowrap" }}>Qty</th>
+                            <th className="py-1 pr-3" style={{ whiteSpace: "nowrap" }}>UOM</th>
+                            <th className="py-1" style={{ whiteSpace: "nowrap" }}>Remark</th>
                           </tr>
                         </thead>
                         <tbody>
                           {items.map((it) => (
                             <tr key={it.id} className="border-t border-neutral-100">
-                              <td className="py-1.5 pr-2 break-words align-top">{it.item_number}</td>
-                              <td className="py-1.5 pr-2 align-top">
+                              <td className="py-1.5 pr-3 align-top" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={it.item_number}>{it.item_number}</td>
+                              <td className="py-1.5 pr-3 align-top">
                                 <div className="break-words" style={{ maxHeight: 72, overflowY: "auto" }}>{it.description}</div>
                               </td>
-                              <td className="py-1.5 pr-2 break-words align-top">{it.sku}</td>
-                              <td className="py-1.5 pr-2 break-words align-top">{it.qty}</td>
-                              <td className="py-1.5 pr-2 break-words align-top">{it.uoms?.name || "—"}</td>
+                              <td className="py-1.5 pr-3 align-top" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={it.sku}>{it.sku}</td>
+                              <td className="py-1.5 pr-3 align-top" style={{ whiteSpace: "nowrap" }}>{it.qty}</td>
+                              <td className="py-1.5 pr-3 align-top" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={it.uoms?.name || ""}>{it.uoms?.name || "—"}</td>
                               <td className="py-1.5 align-top">
                                 <div className="break-words" style={{ maxHeight: 72, overflowY: "auto" }}>{it.remark || "—"}</div>
                               </td>
