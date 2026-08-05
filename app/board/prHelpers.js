@@ -146,7 +146,7 @@ export function pendingActionsFor(prs, profile, allProjectRoles) {
       case "pending_po":
       case "po_issued":
       case "partial_delivery":
-        return !!profile.is_purchasing;
+        return hasRole(pr.project_id, "purchaser");
       case "rejected":
         return pr.requester_id === profile.id;
       default:
