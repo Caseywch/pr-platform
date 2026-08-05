@@ -88,13 +88,13 @@ export default function PrPrintForm({ pr, items = [], attachments = [], deliveri
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "12px" }}>
         <thead>
           <tr>
-            <th style={{ ...headStyle, width: "4%" }}>No</th>
-            <th style={{ ...headStyle, width: "10%" }}>ITEM NO</th>
-            <th style={{ ...headStyle, width: "34%" }}>DESCRIPTION</th>
-            <th style={{ ...headStyle, width: "10%" }}>SKU No</th>
-            <th style={{ ...headStyle, width: "6%" }}>QTY</th>
-            <th style={{ ...headStyle, width: "8%" }}>UOM</th>
-            <th style={{ ...headStyle, width: "28%" }}>REMARK</th>
+            <th style={{ ...headStyle, width: "5%", whiteSpace: "nowrap" }}>No</th>
+            <th style={{ ...headStyle, width: "13%", whiteSpace: "nowrap" }}>ITEM NO</th>
+            <th style={{ ...headStyle, width: "30%", whiteSpace: "nowrap" }}>DESCRIPTION</th>
+            <th style={{ ...headStyle, width: "9%", whiteSpace: "nowrap" }}>SKU No</th>
+            <th style={{ ...headStyle, width: "6%", whiteSpace: "nowrap" }}>QTY</th>
+            <th style={{ ...headStyle, width: "8%", whiteSpace: "nowrap" }}>UOM</th>
+            <th style={{ ...headStyle, width: "29%", whiteSpace: "nowrap" }}>REMARK</th>
           </tr>
         </thead>
         <tbody>
