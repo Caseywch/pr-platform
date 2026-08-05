@@ -12,6 +12,8 @@ const cellStyle = {
   padding: "4px 5px",
   fontSize: "14px",
   verticalAlign: "top",
+  wordBreak: "break-word",
+  overflowWrap: "break-word",
 };
 const headStyle = { ...cellStyle, fontWeight: "bold", textAlign: "center", background: "#eee" };
 const labelStyle = { ...cellStyle, fontWeight: "bold", width: "18%", whiteSpace: "nowrap" };
@@ -86,13 +88,13 @@ export default function PrPrintForm({ pr, items = [], attachments = [], deliveri
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "12px" }}>
         <thead>
           <tr>
-            <th style={{ ...headStyle, width: "5%" }}>No</th>
-            <th style={{ ...headStyle, width: "14%" }}>ITEM NO</th>
-            <th style={{ ...headStyle, width: "32%" }}>DESCRIPTION</th>
-            <th style={{ ...headStyle, width: "15%" }}>SKU No</th>
-            <th style={{ ...headStyle, width: "8%" }}>QTY</th>
-            <th style={{ ...headStyle, width: "10%" }}>UOM</th>
-            <th style={{ ...headStyle, width: "16%" }}>REMARK</th>
+            <th style={{ ...headStyle, width: "4%" }}>No</th>
+            <th style={{ ...headStyle, width: "10%" }}>ITEM NO</th>
+            <th style={{ ...headStyle, width: "34%" }}>DESCRIPTION</th>
+            <th style={{ ...headStyle, width: "10%" }}>SKU No</th>
+            <th style={{ ...headStyle, width: "6%" }}>QTY</th>
+            <th style={{ ...headStyle, width: "8%" }}>UOM</th>
+            <th style={{ ...headStyle, width: "28%" }}>REMARK</th>
           </tr>
         </thead>
         <tbody>
