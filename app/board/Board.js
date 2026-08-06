@@ -527,7 +527,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                       {supplierName(pr)} · required by {pr.required_date}
                     </div>
                   </div>
-                  <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="flex flex-wrap items-center gap-1.5">
                     {timelinessMeta(timeliness(pr, sla)) && (
                       <span
                         className="text-xs px-2 py-1 rounded-full"
@@ -570,7 +570,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
           return (
             <>
             <div
-              className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto no-print"
+              className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto overflow-x-hidden no-print"
               style={{ background: "rgba(0,0,0,0.45)" }}
             >
               <div className="bg-white rounded-lg w-full max-w-2xl my-8 shadow-xl" id="pr-print-area">
@@ -589,7 +589,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                       ×
                     </button>
                   </div>
-                  <div className="flex items-center gap-2 w-full">
+                  <div className="flex flex-wrap items-center gap-2 w-full">
                     {timelinessMeta(timeliness(pr, sla)) && (
                       <span
                         className="text-xs px-2 py-1 rounded-full"
