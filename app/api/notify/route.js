@@ -10,24 +10,54 @@ import {
   deliveryEmail,
   postponedEmail,
   newUserEmail,
+  cancelRequestedEmail,
+  cancelPurchaserDecisionEmail,
+  cancelAdminDecisionEmail,
 } from "@/lib/email/templates";
+
+async function emailsForRole(supabase, projectId, role) {
+  const { data: roles } = await supabase
+    .from("project_roles")
+    .select("user_id")
+    .eq("project_id", projectId)
+    .eq("role", role);
+  const ids = (roles || []).map((r) => r.user_id);
+  if (ids.length === 0) return [];
+  const { data } = await supabase.from("profiles").select("email").in("id", ids);
+  return (data || []).map((p) => p.email).filter(Boolean);
+}
+
+async function emailsForIds(supabase, ids) {
+  const clean = Array.from(new Set(ids.filter(Boolean)));
+  if (clean.length === 0) return [];
+  const { data } = await supabase.from("profiles").select("email").in("id", clean);
+  return (data || []).map((p) => p.email).filter(Boolean);
+}
+
+async function adminEmails(supabase) {
+  const { data } = await supabase.from("profiles").select("email").eq("is_admin", true);
+  return (data || []).map((p) => p.email).filter(Boolean);
+}
 
 async function recipientsFor(supabase, pr) {
   // Requester, Verifier, Approver and Purchasing all receive workflow
-  // updates, per the agreed scope. Purchasing is company-wide, so every
-  // Purchasing-flagged user is included rather than one specific person.
-  const ids = new Set([pr.requester_id, pr.verified_by, pr.approved_by].filter(Boolean));
-  const emails = [];
+  // updates, per the agreed scope. Purchasing is now a per-project role (see
+  // Role Assignments), so this looks up who actually holds it on THIS PR's
+  // project rather than a company-wide flag.
+  const direct = await emailsForIds(supabase, [pr.requester_id, pr.verified_by, pr.approved_by]);
+  const purchasers = await emailsForRole(supabase, pr.project_id, "purchaser");
+  return Array.from(new Set([...direct, ...purchasers]));
+}
 
-  if (ids.size > 0) {
-    const { data } = await supabase.from("profiles").select("email").in("id", Array.from(ids));
-    (data || []).forEach((p) => p.email && emails.push(p.email));
-  }
-
-  const { data: purchasing } = await supabase.from("profiles").select("email").eq("is_purchasing", true);
-  (purchasing || []).forEach((p) => p.email && emails.push(p.email));
-
-  return Array.from(new Set(emails));
+// The requester and verifier "on" a PR for notification purposes: the
+// specific people once they've acted, falling back to everyone holding that
+// role on the project while the PR is still waiting on them.
+async function requesterAndVerifierEmails(supabase, pr) {
+  const requester = await emailsForIds(supabase, [pr.requester_id]);
+  const verifier = pr.verified_by
+    ? await emailsForIds(supabase, [pr.verified_by])
+    : await emailsForRole(supabase, pr.project_id, "verifier");
+  return Array.from(new Set([...requester, ...verifier]));
 }
 
 export async function POST(request) {
@@ -50,10 +80,36 @@ export async function POST(request) {
 
   const { data: pr } = await supabase
     .from("purchase_requisitions")
-    .select("*")
+    .select("*, projects(name, code)")
     .eq("id", prId)
     .single();
   if (!pr) return Response.json({ error: "PR not found" }, { status: 404 });
+
+  // Cancellation-request events have their own recipient logic (they involve
+  // Admin/Purchasing at specific steps, not the standard workflow group).
+  if (event === "cancel_requested") {
+    const to = body.toPurchaser
+      ? await emailsForRole(supabase, pr.project_id, "purchaser")
+      : await adminEmails(supabase);
+    const { subject, html } = cancelRequestedEmail(pr, body.reason, body.toPurchaser);
+    await sendMail({ to, subject, html });
+    return Response.json({ ok: true });
+  }
+
+  if (event === "cancel_purchaser_decision") {
+    const base = await requesterAndVerifierEmails(supabase, pr);
+    const to = body.canCancel ? Array.from(new Set([...base, ...(await adminEmails(supabase))])) : base;
+    const { subject, html } = cancelPurchaserDecisionEmail(pr, body.canCancel);
+    await sendMail({ to, subject, html });
+    return Response.json({ ok: true });
+  }
+
+  if (event === "cancel_admin_decision") {
+    const to = await requesterAndVerifierEmails(supabase, pr);
+    const { subject, html } = cancelAdminDecisionEmail(pr, body.approved);
+    await sendMail({ to, subject, html });
+    return Response.json({ ok: true });
+  }
 
   const to = await recipientsFor(supabase, pr);
 
