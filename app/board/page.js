@@ -10,7 +10,7 @@ export default async function BoardPage() {
 
   if (!user) redirect("/login");
 
-  const [profileRes, prsRes, projectsRes, suppliersRes, uomsRes, allProjectRolesRes, slaRes] = await Promise.all([
+  const [profileRes, prsRes, projectsRes, suppliersRes, uomsRes, allProjectRolesRes, slaRes, cancelRequestsRes] = await Promise.all([
     supabase.from("profiles").select("id, name, is_admin, is_purchasing").eq("id", user.id).single(),
     supabase
       .from("purchase_requisitions")
@@ -21,6 +21,7 @@ export default async function BoardPage() {
     supabase.from("uoms").select("id, name").order("name"),
     supabase.from("project_roles").select("project_id, user_id, role"),
     supabase.from("sla_settings").select("*").eq("id", 1).single(),
+    supabase.from("pr_cancellation_requests").select("*").in("status", ["pending_purchaser", "pending_admin"]),
   ]);
 
   const allProjectRoles = allProjectRolesRes.data || [];
@@ -38,6 +39,7 @@ export default async function BoardPage() {
       uoms={uomsRes.data || []}
       allProjectRoles={allProjectRoles}
       sla={slaRes.data || { verify_days: 0, approve_days: 0, po_days: 0 }}
+      initialCancelRequests={cancelRequestsRes.data || []}
     />
   );
 }
