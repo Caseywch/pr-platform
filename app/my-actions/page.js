@@ -10,7 +10,7 @@ export default async function MyActionsPage() {
 
   if (!user) redirect("/login");
 
-  const [profileRes, prsRes, rolesRes, slaRes] = await Promise.all([
+  const [profileRes, prsRes, rolesRes, slaRes, cancelRequestsRes] = await Promise.all([
     supabase.from("profiles").select("id, name, is_admin, is_purchasing").eq("id", user.id).single(),
     supabase
       .from("purchase_requisitions")
@@ -18,6 +18,7 @@ export default async function MyActionsPage() {
       .order("created_at", { ascending: false }),
     supabase.from("project_roles").select("project_id, user_id, role"),
     supabase.from("sla_settings").select("*").eq("id", 1).single(),
+    supabase.from("pr_cancellation_requests").select("*").in("status", ["pending_purchaser", "pending_admin"]),
   ]);
 
   return (
@@ -26,6 +27,7 @@ export default async function MyActionsPage() {
       prs={prsRes.data || []}
       allProjectRoles={rolesRes.data || []}
       sla={slaRes.data || { verify_days: 0, approve_days: 0, po_days: 0 }}
+      cancelRequests={cancelRequestsRes.data || []}
     />
   );
 }
