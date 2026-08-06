@@ -93,7 +93,7 @@ export default function MyActions({ profile, prs, allProjectRoles, sla, cancelRe
                       {isCancelRequest ? cancelRequestActionLabel(pr._cancelRequest) : actionLabelFor(pr)}
                     </div>
                   </div>
-                  <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="flex flex-wrap items-center gap-1.5">
                     {isCancelRequest && (
                       <span className="text-xs px-2 py-1 rounded-full font-medium" style={{ background: "#B23A2E14", color: "#B23A2E" }}>
                         Cancellation Requested
