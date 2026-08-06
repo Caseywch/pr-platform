@@ -9,9 +9,10 @@ import {
   MAX_ITEMS, STATUS_META, btn, input, card, today, blankItem,
   canActAs, projectHasRole, benchmarkDate, timeliness, timelinessMeta,
   findSimilarSupplier, pendingActionsFor,
+  activeCancelRequest, isLockedByCancelRequest, pendingCancelRequestsFor,
 } from "./prHelpers";
 
-export default function Board({ profile, initialPrs, allProjects, eligibleProjects, suppliers: initialSuppliers, uoms, allProjectRoles, sla }) {
+export default function Board({ profile, initialPrs, allProjects, eligibleProjects, suppliers: initialSuppliers, uoms, allProjectRoles, sla, initialCancelRequests = [] }) {
   const supabase = createClient();
   const [prs, setPrs] = useState(initialPrs);
   const [suppliers, setSuppliers] = useState(initialSuppliers);
@@ -32,6 +33,12 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
   const [postponeDraft, setPostponeDraft] = useState({});
   const [cancelDraft, setCancelDraft] = useState({});
   const [cancellingId, setCancellingId] = useState(null);
+  const [cancelRequests, setCancelRequests] = useState(initialCancelRequests);
+  const [requestingCancelId, setRequestingCancelId] = useState(null);
+  const [cancelRequestDraft, setCancelRequestDraft] = useState({});
+  const [purchaserDeciding, setPurchaserDeciding] = useState(null);
+  const [adminDecidingRequest, setAdminDecidingRequest] = useState(null);
+  const [adminRequestReason, setAdminRequestReason] = useState({});
   const [postponingId, setPostponingId] = useState(null);
   const [adminEditId, setAdminEditId] = useState(null);
   const [eventsByPr, setEventsByPr] = useState({});
@@ -281,6 +288,103 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
     await logEvent(pr.id, "reinstated", `Reinstated to ${STATUS_META[priorStatus]?.label || priorStatus}`);
   };
 
+  // Requester or Verifier asks for a PR to be cancelled. Before a PO exists
+  // this goes straight to Admin; once a PO is issued, the Purchaser is asked
+  // first whether it can actually be cancelled with the supplier.
+  const requestCancellation = async (pr) => {
+    const reason = (cancelRequestDraft[pr.id] || "").trim();
+    if (!reason) return;
+    const startsWith = pr.status === "po_issued" ? "pending_purchaser" : "pending_admin";
+    const { data, error } = await supabase
+      .from("pr_cancellation_requests")
+      .insert({
+        pr_id: pr.id,
+        requested_by: profile.id,
+        reason,
+        pr_status_at_request: pr.status,
+        status: startsWith,
+      })
+      .select()
+      .single();
+    if (error) return setError(error.message);
+    setCancelRequests([...cancelRequests, data]);
+    notify({ event: "cancel_requested", prId: pr.id, reason, toPurchaser: startsWith === "pending_purchaser" });
+    setRequestingCancelId(null);
+    setCancelRequestDraft((prev) => ({ ...prev, [pr.id]: "" }));
+  };
+
+  // The Requester/Verifier who opened the request can pull it back at any
+  // point before it's been decided.
+  const withdrawCancelRequest = async (request) => {
+    const { data, error } = await supabase
+      .from("pr_cancellation_requests")
+      .update({ status: "withdrawn" })
+      .eq("id", request.id)
+      .select()
+      .single();
+    if (error) return setError(error.message);
+    setCancelRequests(cancelRequests.map((r) => (r.id === request.id ? data : r)));
+  };
+
+  // Purchaser's answer to "can this PO actually be cancelled?" — Yes moves it
+  // to Admin for the final decision; No ends it here and unlocks the PR.
+  const purchaserRespondToCancelRequest = async (request, canCancel) => {
+    const { data, error } = await supabase
+      .from("pr_cancellation_requests")
+      .update({
+        status: canCancel ? "pending_admin" : "purchaser_rejected",
+        purchaser_decision: canCancel,
+        purchaser_decided_by: profile.id,
+        purchaser_decided_at: new Date().toISOString(),
+      })
+      .eq("id", request.id)
+      .select()
+      .single();
+    if (error) return setError(error.message);
+    setCancelRequests(cancelRequests.map((r) => (r.id === request.id ? data : r)));
+    notify({ event: "cancel_purchaser_decision", prId: request.pr_id, canCancel });
+    setPurchaserDeciding(null);
+  };
+
+  // Admin's final word. Approve actually cancels the PR (reusing the same
+  // cancellation fields the direct-cancel path already writes); reject just
+  // unlocks it, leaving the door open for a fresh request later.
+  const adminRespondToCancelRequest = async (request, approve) => {
+    const reasonNote = (adminRequestReason[request.id] || "").trim();
+    const { data: reqData, error: reqError } = await supabase
+      .from("pr_cancellation_requests")
+      .update({
+        status: approve ? "approved" : "admin_rejected",
+        admin_decided_by: profile.id,
+        admin_decided_at: new Date().toISOString(),
+        admin_decision_reason: reasonNote || null,
+      })
+      .eq("id", request.id)
+      .select()
+      .single();
+    if (reqError) return setError(reqError.message);
+    setCancelRequests(cancelRequests.map((r) => (r.id === request.id ? reqData : r)));
+
+    if (approve) {
+      const { data: prData, error: prError } = await supabase
+        .from("purchase_requisitions")
+        .update({
+          status: "cancelled",
+          cancelled_by: profile.id,
+          cancelled_at: new Date().toISOString(),
+          cancellation_reason: request.reason,
+        })
+        .eq("id", request.pr_id)
+        .select()
+        .single();
+      if (prError) return setError(prError.message);
+      updatePrLocal(request.pr_id, prData);
+      await logEvent(request.pr_id, "cancelled", `from:${request.pr_status_at_request}|${request.reason} (requested cancellation, approved by ${profile.name})`);
+    }
+    notify({ event: "cancel_admin_decision", prId: request.pr_id, approved: approve });
+    setAdminDecidingRequest(null);
+  };
+
   const logDelivery = async (pr) => {
     const draft = deliveryDraft[pr.id];
     if (!draft?.doNumber?.trim() || !draft?.deliveryDate) return;
@@ -308,7 +412,9 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
   };
 
   const printPr = prs.find((p) => p.id === expandedId) || null;
-  const myActionCount = pendingActionsFor(prs, profile, allProjectRoles).length;
+  const myActionCount =
+    pendingActionsFor(prs, profile, allProjectRoles, cancelRequests).length +
+    pendingCancelRequestsFor(cancelRequests, prs, profile).length;
 
   return (
     <>
@@ -436,6 +542,11 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                     <span className="text-xs px-2 py-1 rounded-full" style={{ background: `${meta.color}14`, color: meta.color }}>
                       {meta.label}
                     </span>
+                    {activeCancelRequest(cancelRequests, pr.id) && (
+                      <span className="text-xs px-2 py-1 rounded-full font-medium" style={{ background: "#B23A2E14", color: "#B23A2E" }}>
+                        Cancellation Requested
+                      </span>
+                    )}
                   </span>
                 </button>
 
@@ -493,6 +604,11 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                     <span className="text-xs px-2 py-1 rounded-full" style={{ background: `${meta.color}14`, color: meta.color }}>
                       {meta.label}
                     </span>
+                    {activeCancelRequest(cancelRequests, pr.id) && (
+                      <span className="text-xs px-2 py-1 rounded-full font-medium" style={{ background: "#B23A2E14", color: "#B23A2E" }}>
+                        Cancellation Requested
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="px-4 pb-4 pt-3">
@@ -737,7 +853,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                     )}
 
                     {/* Administrator: cancel before a PO exists, or put one back */}
-                    {profile.is_admin && ["pending_verification", "rejected", "pending_approval", "pending_po"].includes(pr.status) && (
+                    {profile.is_admin && ["pending_verification", "rejected", "pending_approval", "pending_po", "po_issued"].includes(pr.status) && (
                       cancellingId === pr.id ? (
                         <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3 mt-2">
                           <div className="text-xs text-neutral-600 mb-2">Why is this requisition being cancelled?</div>
@@ -771,6 +887,114 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                         Reinstate requisition
                       </button>
                     )}
+
+                    {(() => {
+                      const request = activeCancelRequest(cancelRequests, pr.id);
+                      const canRequest =
+                        !request &&
+                        !["cancelled", "fulfilled", "partial_delivery"].includes(pr.status) &&
+                        (pr.requester_id === profile.id || canActAs(allProjectRoles, pr.project_id, "verifier", profile.id, profile.is_admin));
+
+                      if (canRequest) {
+                        return requestingCancelId === pr.id ? (
+                          <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3 mt-2">
+                            <div className="text-xs text-neutral-600 mb-2">
+                              {pr.status === "po_issued"
+                                ? "A PO has already been issued. The Purchaser will confirm it can be cancelled with the supplier before this goes to Admin."
+                                : "This will be sent to your Administrator to approve."}
+                            </div>
+                            <div className="flex gap-2">
+                              <input
+                                className={input + " text-xs flex-1"}
+                                placeholder="Reason for cancellation request *"
+                                value={cancelRequestDraft[pr.id] || ""}
+                                onChange={(e) => setCancelRequestDraft({ ...cancelRequestDraft, [pr.id]: e.target.value })}
+                              />
+                              <button
+                                onClick={() => requestCancellation(pr)}
+                                disabled={!(cancelRequestDraft[pr.id] || "").trim()}
+                                className={`${btn} shrink-0`}
+                                style={{ background: (cancelRequestDraft[pr.id] || "").trim() ? "#B23A2E" : "#d4d4d4", color: "white" }}
+                              >
+                                Send request
+                              </button>
+                              <button onClick={() => setRequestingCancelId(null)} className={`${btn} border border-neutral-300 shrink-0`}>Back</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button onClick={() => setRequestingCancelId(pr.id)} className={`${btn} border mt-2`} style={{ borderColor: "#B23A2E", color: "#B23A2E" }}>
+                            Request cancellation
+                          </button>
+                        );
+                      }
+
+                      if (request && request.requested_by === profile.id) {
+                        return (
+                          <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3 mt-2">
+                            <div className="text-xs text-neutral-600 mb-2">
+                              Cancellation requested{request.status === "pending_purchaser" ? " — waiting on Purchasing to confirm the PO can be cancelled." : " — waiting on Admin to approve."}
+                            </div>
+                            <button onClick={() => withdrawCancelRequest(request)} className={`${btn} border border-neutral-300`}>
+                              Withdraw request
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      if (request && request.status === "pending_purchaser" && (profile.is_purchasing || profile.is_admin)) {
+                        return purchaserDeciding === pr.id ? (
+                          <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3 mt-2">
+                            <div className="text-xs text-neutral-600 mb-2">Reason given: {request.reason}</div>
+                            <div className="text-xs text-neutral-600 mb-2">Can this PO be cancelled with the supplier?</div>
+                            <div className="flex gap-2">
+                              <button onClick={() => purchaserRespondToCancelRequest(request, true)} className={`${btn} text-white`} style={{ background: "#1F6B63" }}>
+                                Yes, PO can be cancelled
+                              </button>
+                              <button onClick={() => purchaserRespondToCancelRequest(request, false)} className={`${btn} border`} style={{ borderColor: "#B23A2E", color: "#B23A2E" }}>
+                                No, keep PO
+                              </button>
+                              <button onClick={() => setPurchaserDeciding(null)} className={`${btn} border border-neutral-300`}>Back</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button onClick={() => setPurchaserDeciding(pr.id)} className={`${btn} border mt-2`} style={{ borderColor: "#B23A2E", color: "#B23A2E" }}>
+                            Respond to cancellation request
+                          </button>
+                        );
+                      }
+
+                      if (request && request.status === "pending_admin" && profile.is_admin) {
+                        return adminDecidingRequest === pr.id ? (
+                          <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3 mt-2">
+                            <div className="text-xs text-neutral-600 mb-2">Reason given: {request.reason}</div>
+                            {request.purchaser_decision === true && (
+                              <div className="text-xs mb-2" style={{ color: "#1F6B63" }}>Purchasing confirmed the PO can be cancelled.</div>
+                            )}
+                            <input
+                              className={input + " text-xs w-full mb-2"}
+                              placeholder="Note (optional)"
+                              value={adminRequestReason[request.id] || ""}
+                              onChange={(e) => setAdminRequestReason({ ...adminRequestReason, [request.id]: e.target.value })}
+                            />
+                            <div className="flex gap-2">
+                              <button onClick={() => adminRespondToCancelRequest(request, true)} className={`${btn} text-white`} style={{ background: "#B23A2E" }}>
+                                Approve cancellation
+                              </button>
+                              <button onClick={() => adminRespondToCancelRequest(request, false)} className={`${btn} border border-neutral-300`}>
+                                Reject request
+                              </button>
+                              <button onClick={() => setAdminDecidingRequest(null)} className={`${btn} border border-neutral-300`}>Back</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button onClick={() => setAdminDecidingRequest(pr.id)} className={`${btn} border mt-2`} style={{ borderColor: "#B23A2E", color: "#B23A2E" }}>
+                            Respond to cancellation request
+                          </button>
+                        );
+                      }
+
+                      return null;
+                    })()}
 
                     {/* History trail */}
                     {(eventsByPr[pr.id] || []).length > 0 && (
