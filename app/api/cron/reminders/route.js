@@ -34,6 +34,15 @@ export async function GET(request) {
   const roles = rolesRes.data || [];
   const sla = slaRes.data || { verify_days: 0, approve_days: 0, po_days: 0 };
 
+  // Surface any query failure instead of silently treating it as "nobody to
+  // notify" — a misconfigured key should be loud, not look like success.
+  const queryErrors = [prsRes.error, profilesRes.error, rolesRes.error, slaRes.error]
+    .filter(Boolean)
+    .map((e) => e.message);
+  if (queryErrors.length > 0) {
+    return Response.json({ ok: false, errors: queryErrors }, { status: 500 });
+  }
+
   let sent = 0;
   for (const person of profiles) {
     if (!person.email) continue;
