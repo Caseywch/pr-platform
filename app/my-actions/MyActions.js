@@ -8,20 +8,25 @@ import {
   pendingActionsFor,
   actionLabelFor,
   benchmarkDate,
+  pendingCancelRequestsFor,
+  cancelRequestActionLabel,
 } from "../board/prHelpers";
 
 const card = "bg-white border border-neutral-200 rounded-lg p-5";
 
-export default function MyActions({ profile, prs, allProjectRoles, sla }) {
-  const mine = pendingActionsFor(prs, profile, allProjectRoles);
+export default function MyActions({ profile, prs, allProjectRoles, sla, cancelRequests = [] }) {
+  const mine = pendingActionsFor(prs, profile, allProjectRoles, cancelRequests);
+  const cancelMine = pendingCancelRequestsFor(cancelRequests, prs, profile);
 
-  // Most pressing first: anything already late, then by the date it's due.
-  const sorted = [...mine].sort((a, b) => {
+  // Most pressing first: cancellation requests before routine work (they're
+  // usually time-sensitive), then anything already late, then by due date.
+  const sortedMine = [...mine].sort((a, b) => {
     const la = timeliness(a, sla) === "delay" ? 0 : 1;
     const lb = timeliness(b, sla) === "delay" ? 0 : 1;
     if (la !== lb) return la - lb;
     return (benchmarkDate(a) || "").localeCompare(benchmarkDate(b) || "");
   });
+  const sorted = [...cancelMine, ...sortedMine];
 
   const open = (pr) => {
     window.location.href = `/board?pr=${pr.id}`;
@@ -63,13 +68,15 @@ export default function MyActions({ profile, prs, allProjectRoles, sla }) {
 
         <div className="flex flex-col gap-2">
           {sorted.map((pr) => {
+            const isCancelRequest = !!pr._cancelRequest;
             const meta = STATUS_META[pr.status] || { label: pr.status, color: "#666" };
             const t = timelinessMeta(timeliness(pr, sla));
             return (
               <button
-                key={pr.id}
+                key={pr._cancelRequest ? `cancel-${pr._cancelRequest.id}` : pr.id}
                 onClick={() => open(pr)}
                 className={card + " p-0 text-left w-full"}
+                style={isCancelRequest ? { borderColor: "#B23A2E" } : undefined}
               >
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-4 py-3">
                   <div className="min-w-[150px] flex-1">
@@ -82,12 +89,17 @@ export default function MyActions({ profile, prs, allProjectRoles, sla }) {
                     <div className="text-xs text-neutral-600 mt-0.5">
                       {pr.suppliers?.name || "No supplier"} · raised by {pr.requester?.name || "\u2014"}
                     </div>
-                    <div className="text-xs mt-1 font-medium" style={{ color: meta.color }}>
-                      {actionLabelFor(pr)}
+                    <div className="text-xs mt-1 font-medium" style={{ color: isCancelRequest ? "#B23A2E" : meta.color }}>
+                      {isCancelRequest ? cancelRequestActionLabel(pr._cancelRequest) : actionLabelFor(pr)}
                     </div>
                   </div>
                   <span className="flex items-center gap-1.5 shrink-0">
-                    {t && (
+                    {isCancelRequest && (
+                      <span className="text-xs px-2 py-1 rounded-full font-medium" style={{ background: "#B23A2E14", color: "#B23A2E" }}>
+                        Cancellation Requested
+                      </span>
+                    )}
+                    {!isCancelRequest && t && (
                       <span
                         className="text-xs px-2 py-1 rounded-full"
                         style={{ background: `${t.color}14`, color: t.color }}
