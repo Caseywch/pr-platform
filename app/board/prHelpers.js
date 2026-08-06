@@ -130,7 +130,7 @@ export function findSimilarSupplier(suppliers, typed) {
 // Which requisitions are waiting on a particular person right now.
 // Administrators can technically act on anything, but that would make their
 // list meaningless — so this only counts roles they are actually assigned to.
-export function pendingActionsFor(prs, profile, allProjectRoles) {
+export function pendingActionsFor(prs, profile, allProjectRoles, cancelRequests = []) {
   if (!profile) return [];
   const hasRole = (projectId, role) =>
     allProjectRoles.some(
@@ -138,6 +138,10 @@ export function pendingActionsFor(prs, profile, allProjectRoles) {
     );
 
   return prs.filter((pr) => {
+    // A PR with a pending cancellation request is frozen — it belongs in
+    // whoever owns that decision's queue, not the normal workflow queue.
+    if (isLockedByCancelRequest(cancelRequests, pr.id)) return false;
+
     switch (pr.status) {
       case "pending_verification":
         return hasRole(pr.project_id, "verifier");
@@ -172,4 +176,43 @@ export function actionLabelFor(pr) {
     default:
       return "";
   }
+}
+
+// --- Cancellation requests -------------------------------------------------
+// A lightweight approval layered on top of the existing direct-cancel (which
+// Admin still uses unchanged). While a request is pending, the PR is locked:
+// no other workflow action can proceed, and it carries a visible badge.
+
+export function activeCancelRequest(cancelRequests, prId) {
+  return (cancelRequests || []).find(
+    (r) => r.pr_id === prId && (r.status === "pending_purchaser" || r.status === "pending_admin")
+  );
+}
+
+export function isLockedByCancelRequest(cancelRequests, prId) {
+  return !!activeCancelRequest(cancelRequests, prId);
+}
+
+// Cancellation requests waiting on a specific person, folded into the same
+// shape as a normal pending action so they can sit alongside Verify/Approve/
+// etc. in My Actions without a separate list.
+export function pendingCancelRequestsFor(cancelRequests, prs, profile) {
+  if (!profile) return [];
+  return (cancelRequests || [])
+    .filter((r) => {
+      if (r.status === "pending_purchaser") return !!profile.is_purchasing || profile.is_admin;
+      if (r.status === "pending_admin") return !!profile.is_admin;
+      return false;
+    })
+    .map((r) => {
+      const pr = prs.find((p) => p.id === r.pr_id);
+      return pr ? { ...pr, _cancelRequest: r } : null;
+    })
+    .filter(Boolean);
+}
+
+export function cancelRequestActionLabel(request) {
+  if (request.status === "pending_purchaser") return "Confirm PO can be cancelled";
+  if (request.status === "pending_admin") return "Approve cancellation";
+  return "";
 }
