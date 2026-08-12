@@ -1436,6 +1436,34 @@ function EditPrForm({ supabase, pr, suppliers, uoms, initialItems, onUpdated, on
     if (!canSubmit) return;
     setSubmitting(true);
 
+    // The delete-old-items policy only permits this while the PR is still
+    // "rejected" — so the old items MUST be cleared out before the status
+    // moves on, or the delete silently matches nothing (Supabase does not
+    // treat an RLS-filtered delete as an error) and every resubmission ends
+    // up appending a fresh copy of the items on top of the untouched old ones.
+    const { error: deleteError } = await supabase.from("pr_items").delete().eq("pr_id", pr.id);
+    if (deleteError) {
+      onError(deleteError.message);
+      setSubmitting(false);
+      return;
+    }
+
+    const itemRows = items.map((i) => ({
+      pr_id: pr.id,
+      item_number: i.itemNumber.trim(),
+      description: i.description.trim(),
+      sku: i.sku.trim(),
+      qty: Number(i.qty),
+      uom_id: i.uomId,
+      remark: i.remark.trim() || null,
+    }));
+    const { error: itemsError } = await supabase.from("pr_items").insert(itemRows);
+    if (itemsError) {
+      onError(itemsError.message);
+      setSubmitting(false);
+      return;
+    }
+
     const { data: prData, error: prError } = await supabase
       .from("purchase_requisitions")
       .update(
@@ -1456,29 +1484,6 @@ function EditPrForm({ supabase, pr, suppliers, uoms, initialItems, onUpdated, on
 
     if (prError) {
       onError(prError.message);
-      setSubmitting(false);
-      return;
-    }
-
-    const { error: deleteError } = await supabase.from("pr_items").delete().eq("pr_id", pr.id);
-    if (deleteError) {
-      onError(deleteError.message);
-      setSubmitting(false);
-      return;
-    }
-
-    const itemRows = items.map((i) => ({
-      pr_id: pr.id,
-      item_number: i.itemNumber.trim(),
-      description: i.description.trim(),
-      sku: i.sku.trim(),
-      qty: Number(i.qty),
-      uom_id: i.uomId,
-      remark: i.remark.trim() || null,
-    }));
-    const { error: itemsError } = await supabase.from("pr_items").insert(itemRows);
-    if (itemsError) {
-      onError(itemsError.message);
       setSubmitting(false);
       return;
     }
