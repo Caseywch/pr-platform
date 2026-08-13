@@ -1315,11 +1315,12 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, setSuppliers, uoms, 
                 <button onClick={() => removeItem(idx)} className="text-xs text-red-600">Remove</button>
               )}
             </div>
-            <input
+            <textarea
               className={input + " w-full mb-2"}
               placeholder="Description of item *"
               value={it.description}
               onChange={(e) => updateItem(idx, "description", e.target.value)}
+              rows={2}
             />
             <div className="grid grid-cols-2 gap-2 mb-2">
               <input
@@ -1348,11 +1349,12 @@ function NewPrForm({ supabase, eligibleProjects, suppliers, setSuppliers, uoms, 
                 {uoms.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
-            <input
+            <textarea
               className={input + " w-full"}
               placeholder="Remark (optional)"
               value={it.remark}
               onChange={(e) => updateItem(idx, "remark", e.target.value)}
+              rows={2}
             />
           </div>
         ))}
@@ -1584,11 +1586,12 @@ function EditPrForm({ supabase, pr, suppliers, uoms, initialItems, onUpdated, on
                 <button onClick={() => removeItem(idx)} className="text-xs text-red-600">Remove</button>
               )}
             </div>
-            <input
+            <textarea
               className={input + " w-full mb-2"}
               placeholder="Description of item *"
               value={it.description}
               onChange={(e) => updateItem(idx, "description", e.target.value)}
+              rows={2}
             />
             <div className="grid grid-cols-2 gap-2 mb-2">
               <input
@@ -1617,11 +1620,12 @@ function EditPrForm({ supabase, pr, suppliers, uoms, initialItems, onUpdated, on
                 {uoms.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
-            <input
+            <textarea
               className={input + " w-full"}
               placeholder="Remark (optional)"
               value={it.remark}
               onChange={(e) => updateItem(idx, "remark", e.target.value)}
+              rows={2}
             />
           </div>
         ))}
