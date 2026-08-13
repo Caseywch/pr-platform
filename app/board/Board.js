@@ -624,9 +624,9 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                     {!items && <div className="text-xs text-neutral-600">Loading items…</div>}
                     {items && (
                       <div className="overflow-x-auto mb-3">
-                        <table className="text-xs" style={{ tableLayout: "fixed", minWidth: 480 }}>
+                        <table className="text-xs" style={{ tableLayout: "auto", minWidth: 480 }}>
                           <colgroup>
-                            <col style={{ width: 56 }} />
+                            <col />
                             <col style={{ width: 150 }} />
                             <col style={{ width: 56 }} />
                             <col style={{ width: 44 }} />
@@ -646,7 +646,7 @@ export default function Board({ profile, initialPrs, allProjects, eligibleProjec
                           <tbody>
                             {items.map((it) => (
                               <tr key={it.id} className="border-t border-neutral-100">
-                                <td className="py-1.5 pr-3 align-top break-words">{it.item_number}</td>
+                                <td className="py-1.5 pr-3 align-top" style={{ whiteSpace: "nowrap" }}>{it.item_number}</td>
                                 <td className="py-1.5 pr-3 align-top">
                                   <div className="break-words" style={{ maxHeight: 72, overflowY: "auto" }}>{it.description}</div>
                                 </td>
