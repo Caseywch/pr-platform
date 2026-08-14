@@ -19,7 +19,7 @@ export default async function BoardPage() {
     supabase.from("projects").select("id, name, code").order("name"),
     supabase.from("suppliers").select("id, name, status").order("name"),
     supabase.from("uoms").select("id, name").order("name"),
-    supabase.from("project_roles").select("project_id, user_id, role"),
+    supabase.from("project_roles").select("project_id, user_id, role, profiles(name)"),
     supabase.from("sla_settings").select("*").eq("id", 1).single(),
     supabase.from("pr_cancellation_requests").select("*").in("status", ["pending_purchaser", "pending_admin"]),
     supabase.from("pr_change_requests").select("*").eq("status", "pending"),
