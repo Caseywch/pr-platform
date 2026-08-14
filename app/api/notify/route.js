@@ -13,6 +13,8 @@ import {
   cancelRequestedEmail,
   cancelPurchaserDecisionEmail,
   cancelAdminDecisionEmail,
+  prEditedEmail,
+  prChangeDecisionEmail,
 } from "@/lib/email/templates";
 
 async function emailsForRole(supabase, projectId, role) {
@@ -58,6 +60,29 @@ async function requesterAndVerifierEmails(supabase, pr) {
     ? await emailsForIds(supabase, [pr.verified_by])
     : await emailsForRole(supabase, pr.project_id, "verifier");
   return Array.from(new Set([...requester, ...verifier]));
+}
+
+// For the pre-PO direct-edit notification: whoever verified and/or approved
+// this PR (specific person if that stage has happened, else everyone
+// currently holding that role on the project). The Requester themselves is
+// NOT included here — they're the one making the edit, not a recipient.
+async function verifierAndApproverEmails(supabase, pr) {
+  const verifier = pr.verified_by
+    ? await emailsForIds(supabase, [pr.verified_by])
+    : await emailsForRole(supabase, pr.project_id, "verifier");
+  const approver = pr.approved_by
+    ? await emailsForIds(supabase, [pr.approved_by])
+    : await emailsForRole(supabase, pr.project_id, "approver");
+  return Array.from(new Set([...verifier, ...approver]));
+}
+
+// For the change-request decision: Requester (they proposed it, they need
+// the outcome) plus Verifier and Approver, same specific-person-else-role
+// pattern used throughout.
+async function requesterVerifierApproverEmails(supabase, pr) {
+  const requester = await emailsForIds(supabase, [pr.requester_id]);
+  const verifierApprover = await verifierAndApproverEmails(supabase, pr);
+  return Array.from(new Set([...requester, ...verifierApprover]));
 }
 
 export async function POST(request) {
@@ -107,6 +132,26 @@ export async function POST(request) {
   if (event === "cancel_admin_decision") {
     const to = await requesterAndVerifierEmails(supabase, pr);
     const { subject, html } = cancelAdminDecisionEmail(pr, body.approved);
+    await sendMail({ to, subject, html });
+    return Response.json({ ok: true });
+  }
+
+  // Requester directly edited a pre-PO PR. Only Verifier/Approver need to
+  // know (not the Requester themselves, since they're the one who acted).
+  // If neither stage has happened yet, this resolves to nobody and no email
+  // is sent — matches "if it had already reached that stage".
+  if (event === "pr_edited") {
+    const to = await verifierAndApproverEmails(supabase, pr);
+    if (to.length > 0) {
+      const { subject, html } = prEditedEmail(pr);
+      await sendMail({ to, subject, html });
+    }
+    return Response.json({ ok: true });
+  }
+
+  if (event === "pr_change_decision") {
+    const to = await requesterVerifierApproverEmails(supabase, pr);
+    const { subject, html } = prChangeDecisionEmail(pr, body.approved, body.reason);
     await sendMail({ to, subject, html });
     return Response.json({ ok: true });
   }
