@@ -51,17 +51,6 @@ async function recipientsFor(supabase, pr) {
   return Array.from(new Set([...direct, ...purchasers]));
 }
 
-// The requester and verifier "on" a PR for notification purposes: the
-// specific people once they've acted, falling back to everyone holding that
-// role on the project while the PR is still waiting on them.
-async function requesterAndVerifierEmails(supabase, pr) {
-  const requester = await emailsForIds(supabase, [pr.requester_id]);
-  const verifier = pr.verified_by
-    ? await emailsForIds(supabase, [pr.verified_by])
-    : await emailsForRole(supabase, pr.project_id, "verifier");
-  return Array.from(new Set([...requester, ...verifier]));
-}
-
 // For the pre-PO direct-edit notification: whoever verified and/or approved
 // this PR (specific person if that stage has happened, else everyone
 // currently holding that role on the project). The Requester themselves is
@@ -83,6 +72,19 @@ async function requesterVerifierApproverEmails(supabase, pr) {
   const requester = await emailsForIds(supabase, [pr.requester_id]);
   const verifierApprover = await verifierAndApproverEmails(supabase, pr);
   return Array.from(new Set([...requester, ...verifierApprover]));
+}
+
+// The 4 people named in Parked Item 14, added consistently to all 3
+// cancellation-request emails: Requester, the SPECIFIC Verifier who
+// verified (skipped, not role-fallback, if not yet verified), the SPECIFIC
+// Approver who approved (skipped if not yet approved), and the SPECIFIC
+// Purchaser who issued the PO (skipped if no PO issued yet). This is
+// deliberately different from verifierAndApproverEmails, which falls back
+// to "everyone with that role" — here we skip entirely instead, per the
+// explicit spec ("no fallback to everyone with that role").
+async function cancellationNamedRecipients(supabase, pr) {
+  const ids = [pr.requester_id, pr.verified_by, pr.approved_by, pr.po_issued_by].filter(Boolean);
+  return emailsForIds(supabase, ids);
 }
 
 export async function POST(request) {
@@ -112,25 +114,32 @@ export async function POST(request) {
 
   // Cancellation-request events have their own recipient logic (they involve
   // Admin/Purchasing at specific steps, not the standard workflow group).
+  // All three ALSO include the 4 named people from cancellationNamedRecipients
+  // (Requester, specific Verifier/Approver/PO-issuer), added consistently
+  // across all 3 steps per Parked Item 14 — in addition to, not instead of,
+  // the existing action-recipients below.
   if (event === "cancel_requested") {
-    const to = body.toPurchaser
+    const action = body.toPurchaser
       ? await emailsForRole(supabase, pr.project_id, "purchaser")
       : await adminEmails(supabase);
+    const named = await cancellationNamedRecipients(supabase, pr);
+    const to = Array.from(new Set([...action, ...named]));
     const { subject, html } = cancelRequestedEmail(pr, body.reason, body.toPurchaser);
     await sendMail({ to, subject, html });
     return Response.json({ ok: true });
   }
 
   if (event === "cancel_purchaser_decision") {
-    const base = await requesterAndVerifierEmails(supabase, pr);
-    const to = body.canCancel ? Array.from(new Set([...base, ...(await adminEmails(supabase))])) : base;
+    const named = await cancellationNamedRecipients(supabase, pr);
+    const action = body.canCancel ? await adminEmails(supabase) : [];
+    const to = Array.from(new Set([...named, ...action]));
     const { subject, html } = cancelPurchaserDecisionEmail(pr, body.canCancel);
     await sendMail({ to, subject, html });
     return Response.json({ ok: true });
   }
 
   if (event === "cancel_admin_decision") {
-    const to = await requesterAndVerifierEmails(supabase, pr);
+    const to = await cancellationNamedRecipients(supabase, pr);
     const { subject, html } = cancelAdminDecisionEmail(pr, body.approved);
     await sendMail({ to, subject, html });
     return Response.json({ ok: true });
