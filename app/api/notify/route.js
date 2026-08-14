@@ -80,7 +80,7 @@ export async function POST(request) {
 
   const { data: pr } = await supabase
     .from("purchase_requisitions")
-    .select("*, projects(name, code)")
+    .select("*, projects(name, code), suppliers(name)")
     .eq("id", prId)
     .single();
   if (!pr) return Response.json({ error: "PR not found" }, { status: 404 });
