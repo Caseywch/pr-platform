@@ -63,6 +63,8 @@ export async function GET(request) {
       pr_number: pr.pr_number,
       action: actionLabelFor(pr),
       dueLabel: benchmarkDate(pr) || pr.request_date,
+      project: pr.projects?.name ? `${pr.projects.name}${pr.projects.code ? ` (${pr.projects.code})` : ""}` : null,
+      supplier: pr.suppliers?.name || null,
     }));
 
     const { subject, html } = overdueReminderEmail(person.name, items);
