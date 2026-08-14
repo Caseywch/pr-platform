@@ -50,6 +50,7 @@ export default function MyActions({ profile, prs, allProjectRoles, sla, cancelRe
             <a href="/board" className="text-xs underline text-neutral-600">Board</a>
             <a href="/dashboard" className="text-xs underline text-neutral-600">Dashboard</a>
             <a href="/schedule" className="text-xs underline text-neutral-600">Schedule</a>
+            <a href="/favourites" className="text-xs underline text-neutral-600">Favourites</a>
             <a href="/" className="text-xs underline text-neutral-600">Home</a>
           </div>
         </div>
