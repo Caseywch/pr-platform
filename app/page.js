@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SignOutButton from "./SignOutButton";
 import Logo from "./Logo";
+import { PLATFORM_VERSION, PLATFORM_VERSION_DATE, WHATS_NEW } from "@/lib/releaseInfo";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -44,6 +45,22 @@ export default async function Home() {
             credentials are issued individually and must not be shared. Should you forget your PIN,
             please contact your Administrator for assistance.
           </div>
+        </div>
+
+        <div className="bg-white border border-neutral-200 rounded-lg p-5 mt-4">
+          <div className="text-sm font-bold mb-3">What's New — Version {PLATFORM_VERSION}</div>
+          <div className="text-xs uppercase tracking-wide text-neutral-600 mb-1.5">New Features</div>
+          <ul className="text-sm text-neutral-700 list-disc pl-5 mb-4">
+            {WHATS_NEW.newFeatures.map((item, i) => <li key={i} className="mb-1">{item}</li>)}
+          </ul>
+          <div className="text-xs uppercase tracking-wide text-neutral-600 mb-1.5">Bug Fixes</div>
+          <ul className="text-sm text-neutral-700 list-disc pl-5">
+            {WHATS_NEW.bugFixes.map((item, i) => <li key={i} className="mb-1">{item}</li>)}
+          </ul>
+        </div>
+
+        <div className="text-xs text-neutral-500 mt-8 text-center">
+          Version {PLATFORM_VERSION} — Updated {PLATFORM_VERSION_DATE}
         </div>
       </div>
     </div>
