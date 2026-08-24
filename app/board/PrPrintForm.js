@@ -14,6 +14,7 @@ const cellStyle = {
   verticalAlign: "top",
   wordBreak: "break-word",
   overflowWrap: "break-word",
+  whiteSpace: "pre-wrap",
 };
 const headStyle = { ...cellStyle, fontWeight: "bold", textAlign: "center", background: "#eee" };
 const labelStyle = { ...cellStyle, fontWeight: "bold", width: "18%", whiteSpace: "nowrap" };
